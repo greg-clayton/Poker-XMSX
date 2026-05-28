@@ -938,6 +938,8 @@ function renderResultBanner() {
       btn.addEventListener('click', function() {
         var type = btn.dataset.type;
         var val  = btn.dataset.val;
+        var ab = document.getElementById('admin-btns');
+        if (ab) ab.dataset.ids = '';
         if (type === 'size' || type === 'edit_size') send('set_agreed', { size: val });
         else if (type === 'conf' || type === 'edit_conf') send('set_agreed', { conf: val });
       });
@@ -1179,7 +1181,8 @@ function renderAdminControls() {
     if (!game.revealed) {
       btns.push({ id: 'btn-reveal', label: '🐾 Reveal Paws', cls: 'btn-purple', action: 'reveal', disabled: !anyVoted });
     }
-    var hasMoreTickets = game.tickets && (game.ticketIndex + 1) < game.tickets.length;
+    var nextTicket = game.tickets && game.tickets[(game.ticketIndex || 0) + 1];
+    var hasMoreTickets = !!(nextTicket && nextTicket.label);
     if (game.revealed && fullyAgreed && hasMoreTickets) {
       btns.push({ id: 'btn-next', label: '🐁 Next Round', cls: 'btn-orange', action: 'new_round' });
     }
