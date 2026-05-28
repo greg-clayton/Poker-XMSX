@@ -454,28 +454,33 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-/* ── LocalStorage helpers ─────────────────────────────────────────────────── */
+/* ── Session storage helpers ──────────────────────────────────────────────── */
+// All identity state lives in sessionStorage (per-tab) so that opening a new
+// tab always shows the login screen and two people on the same machine can use
+// different browser tabs without sharing identity.
 function saveLocal() {
   try {
-    localStorage.setItem('pokerPlayerId',   myId   || '');
-    localStorage.setItem('pokerPlayerName', myName || '');
-    // wantAdmin is NOT persisted — admin status is determined by server state on rejoin
+    sessionStorage.setItem('pokerPlayerId',   myId   || '');
+    sessionStorage.setItem('pokerPlayerName', myName || '');
   } catch(e) {}
 }
 function loadLocal() {
   try {
-    myId   = localStorage.getItem('pokerPlayerId')   || null;
-    myName = localStorage.getItem('pokerPlayerName') || null;
-    // wantAdmin is never loaded from storage; always starts false
+    myId   = sessionStorage.getItem('pokerPlayerId')   || null;
+    myName = sessionStorage.getItem('pokerPlayerName') || null;
+    // wantAdmin is never persisted — admin must be claimed via the toggle each time
     wantAdmin = false;
   } catch(e) {}
 }
 function clearLocal() {
   try {
+    sessionStorage.removeItem('pokerPlayerId');
+    sessionStorage.removeItem('pokerPlayerName');
+    sessionStorage.removeItem('pokerInSession');
+    // clean up any old localStorage keys from previous versions
     localStorage.removeItem('pokerPlayerId');
     localStorage.removeItem('pokerPlayerName');
     localStorage.removeItem('pokerWantAdmin');
-    sessionStorage.removeItem('pokerInSession');
   } catch(e) {}
 }
 function setInSession(yes) {
@@ -1014,9 +1019,9 @@ function renderPlayerList() {
   if (!list) return;
 
   var nonAdmin = game.players.filter(function(p) { return p.id !== game.adminId; });
-  var total    = game.players.length;
   var voted    = nonAdmin.filter(function(p) { return p.sizeVote && p.confVote; }).length;
-  if (label) label.textContent = 'The Clowder (' + voted + '/' + total + ') 🐱';
+  // Denominator = voting players only (admin can't vote, so never counts toward total)
+  if (label) label.textContent = 'The Clowder (' + voted + '/' + nonAdmin.length + ') 🐱';
 
   var html = '';
   game.players.forEach(function(p) {
