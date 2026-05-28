@@ -448,6 +448,7 @@ var selectedConf = null;
 var ws           = null;
 var lastGameJson = '';
 var summaryOpen  = false;
+var prevInGame   = false; // tracks previous inGame state to detect server-side kicks
 
 /* ── Generate a unique ID ────────────────────────────────────────────────── */
 function uid() {
@@ -503,14 +504,14 @@ function connect() {
 
   ws.onopen = function() {
     setConn(true);
-    // If we have saved session credentials and are already past the join screen,
-    // re-send a join to restore server-side state (e.g. after a WS reconnect).
-    // Admin status is derived from what the server currently holds — never assumed.
-    if (myId && myName && !hasLeft) {
+    // Re-send join on WS reconnect only if still legitimately in a session.
+    // isInSession() is cleared when the server kicks us out (game reset, etc.),
+    // so this will NOT fire for players who were booted between disconnects.
+    if (myId && myName && !hasLeft && isInSession()) {
       var screen = currentScreen();
       if (screen !== 'join-screen') {
         var serverAdmin = game && game.adminId;
-        var claimAdmin  = serverAdmin === myId; // only if server already knows us as admin
+        var claimAdmin  = serverAdmin === myId; // only reclaim admin if server confirms it
         send('join', { name: myName, wantAdmin: claimAdmin });
       }
     }
@@ -583,8 +584,16 @@ function onStateChange() {
   if (rl) rl.textContent = 'Round #' + (game.round || 1);
 
   // --- Routing ---
-  var inGame = myId && game.players && game.players.some(function(p) { return p.id === myId; });
-  var isAdmin = myId && game.adminId === myId;
+  var inGame  = !!(myId && game.players && game.players.some(function(p) { return p.id === myId; }));
+  var isAdmin = !!(myId && game.adminId === myId);
+
+  // If the server removed us from the game (e.g. End Session / reset), clear the
+  // in-session flag so we can't be auto-rejoined into the next session without
+  // explicitly going through the login screen again.
+  if (prevInGame && !inGame) {
+    setInSession(false);
+  }
+  prevInGame = inGame;
 
   // If game is in summary, open modal (handled separately via show_summary event)
   // but if we're mid-session and showSummary becomes true without an event, catch it:
