@@ -1259,11 +1259,17 @@ function showInlineConfirm(anchorBtn, confirmText, onConfirm, onCancel) {
    ═══════════════════════════════════════════════════════════════════════════ */
 function openSummaryModal() {
   summaryOpen = true;
-  var history = (game && game.history) || (lastSession && lastSession.history) || [];
-  var attendees = (game && game.players ? game.players.map(function(p) { return p.name; }) : [])
+  // Use game history if non-empty, otherwise fall back to lastSession
+  // (empty array [] is truthy in JS so must check .length explicitly)
+  var history = (game && game.history && game.history.length ? game.history : null)
+               || (lastSession && lastSession.history) || [];
+  var attendees = (game && game.players && game.players.length
+               ? game.players.map(function(p) { return p.name; }).filter(Boolean)
+               : null)
                || (lastSession && lastSession.attendees) || [];
 
-  var closable  = !game || game.showSummary;
+  // Closable when: no active session set up, or game is in show_summary state
+  var closable = !game || !game.setupDone || game.showSummary;
   var completedAt = lastSession && lastSession.completedAt ? new Date(lastSession.completedAt).toLocaleString() : '';
 
   var rows = history.map(function(h, i) {
