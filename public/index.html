@@ -853,10 +853,10 @@ function renderResultBanner() {
     var tieHTML = '';
     if (isAdmin) {
       if (game.sizeTie && !game.agreedSize) {
-        tieHTML += buildTiePicker('size', 'Size is tied — choose one:', SIZE_OPTIONS, 'set_agreed_size');
+        tieHTML += buildTiePicker('size', 'Size is tied — choose one:', SIZE_OPTIONS, 'size');
       }
       if (game.confTie && !game.agreedConf) {
-        tieHTML += buildTiePicker('conf', 'Confidence is tied — choose one:', CONF_OPTIONS, 'set_agreed_conf');
+        tieHTML += buildTiePicker('conf', 'Confidence is tied — choose one:', CONF_OPTIONS, 'conf');
       }
       // Edit button when agreed but no active tie
       if (game.agreedSize && game.agreedConf && !game.sizeTie && !game.confTie) {
