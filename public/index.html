@@ -457,16 +457,17 @@ function uid() {
 /* ── LocalStorage helpers ─────────────────────────────────────────────────── */
 function saveLocal() {
   try {
-    localStorage.setItem('pokerPlayerId',   myId    || '');
-    localStorage.setItem('pokerPlayerName', myName  || '');
-    localStorage.setItem('pokerWantAdmin',  wantAdmin ? '1' : '');
+    localStorage.setItem('pokerPlayerId',   myId   || '');
+    localStorage.setItem('pokerPlayerName', myName || '');
+    // wantAdmin is NOT persisted — admin status is determined by server state on rejoin
   } catch(e) {}
 }
 function loadLocal() {
   try {
-    myId       = localStorage.getItem('pokerPlayerId')   || null;
-    myName     = localStorage.getItem('pokerPlayerName') || null;
-    wantAdmin  = localStorage.getItem('pokerWantAdmin')  === '1';
+    myId   = localStorage.getItem('pokerPlayerId')   || null;
+    myName = localStorage.getItem('pokerPlayerName') || null;
+    // wantAdmin is never loaded from storage; always starts false
+    wantAdmin = false;
   } catch(e) {}
 }
 function clearLocal() {
@@ -497,11 +498,13 @@ function connect() {
 
   ws.onopen = function() {
     setConn(true);
-    // If we have saved session credentials and there's an active game, auto-rejoin
+    // If we have saved session credentials and there's an active game, auto-rejoin.
+    // Only claim admin if the server already recognises this ID as admin.
     if (myId && myName && !hasLeft) {
       var screen = currentScreen();
       if (screen !== 'join-screen') {
-        send('join', { name: myName, wantAdmin: wantAdmin });
+        var stillAdmin = !!(game && game.adminId === myId);
+        send('join', { name: myName, wantAdmin: stillAdmin });
       }
     }
   };
@@ -586,9 +589,11 @@ function onStateChange() {
   if (!inGame) {
     // Not yet in the game — decide which screen to show
     if (game.setupDone && !game.showSummary) {
-      // Active session running — check if we should auto-rejoin
+      // Active session running — check if we should auto-rejoin.
+      // Only reclaim admin if server already has this ID as admin.
       if (myId && myName && !hasLeft && isInSession()) {
-        send('join', { name: myName, wantAdmin: wantAdmin });
+        var stillAdmin = !!(game && game.adminId === myId);
+        send('join', { name: myName, wantAdmin: stillAdmin });
         return;
       }
       // Show join with warning banner
@@ -1618,10 +1623,7 @@ function animChasePass(msg) {
     nameInput.value = myName;
     updateJoinBtn();
   }
-  if (wantAdmin) {
-    wantAdmin = false; // reset so toggle wires up correctly
-    if (adminToggle) adminToggle.click();
-  }
+  // Admin toggle is never pre-checked — user must tick it explicitly each time
 })();
 
 /* ═══════════════════════════════════════════════════════════════════════════
