@@ -93,12 +93,16 @@
   .result-val      { font-family:'Fredoka One',cursive; font-size:30px; font-weight:400; color:var(--orange); line-height:1.1; text-shadow:0 0 20px rgba(244,162,97,0.4); }
   .result-sub      { font-size:10px; color:var(--text-dim); margin-top:2px; }
   .agreed-block    { margin-top:12px; padding-top:12px; border-top:1px solid rgba(244,162,97,0.2); text-align:center; }
-  .tie-picker      { margin-top:10px; padding:10px 14px; border-radius:10px; background:rgba(244,162,97,0.06); border:1px solid rgba(244,162,97,0.2); text-align:left; }
-  .tie-title       { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--orange); margin-bottom:8px; }
-  .tie-btns        { display:flex; gap:6px; flex-wrap:wrap; }
-  .tie-btn         { padding:6px 12px; border-radius:8px; border:1px solid rgba(244,162,97,0.3); background:rgba(244,162,97,0.08); color:var(--orange); font-size:13px; cursor:pointer; font-family:'Fredoka One',cursive; transition:all 0.15s; }
-  .tie-btn:hover   { background:rgba(244,162,97,0.2); }
-  .tie-btn-sub     { font-size:9px; font-family:'DM Sans',sans-serif; color:rgba(244,162,97,0.6); display:block; }
+  .tie-picker           { margin-top:10px; padding:10px 14px; border-radius:10px; background:rgba(244,162,97,0.06); border:1px solid rgba(244,162,97,0.2); text-align:left; }
+  .tie-title            { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--orange); margin-bottom:8px; }
+  .tie-col-title        { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:rgba(244,162,97,0.55); margin-bottom:5px; }
+  .tie-btns             { display:flex; gap:6px; flex-wrap:wrap; }
+  .admin-selector-grid  { display:flex; gap:14px; flex-wrap:wrap; }
+  .admin-selector-col   { flex:1; min-width:130px; }
+  .tie-btn              { padding:6px 12px; border-radius:8px; border:1px solid rgba(244,162,97,0.3); background:rgba(244,162,97,0.08); color:var(--orange); font-size:13px; cursor:pointer; font-family:'Fredoka One',cursive; transition:all 0.15s; }
+  .tie-btn:hover        { background:rgba(244,162,97,0.2); }
+  .tie-btn.selected     { background:rgba(244,162,97,0.35); border-color:var(--orange); box-shadow:0 0 0 1px var(--orange); }
+  .tie-btn-sub          { font-size:9px; font-family:'DM Sans',sans-serif; color:rgba(244,162,97,0.6); display:block; }
 
   /* ── Vote cards (size + confidence) ── */
   .vote-section     { }
@@ -453,6 +457,9 @@ var prevSetupDone     = false; // tracks previous setupDone to detect new-sessio
 var voteSent          = false; // true after tryAutoVote fires successfully this round
 var lastSeenRound     = null;  // used to detect round/ticket advances
 var lastSeenTicketIdx = null;
+var tiePendingSize    = null;  // admin's locally-highlighted size choice (pre-submit)
+var tiePendingConf    = null;  // admin's locally-highlighted conf choice (pre-submit)
+var tieEditOpen       = false; // whether the ✏️ Edit picker is expanded
 
 /* ── Generate a unique ID ────────────────────────────────────────────────── */
 function uid() {
@@ -616,9 +623,11 @@ function onStateChange() {
       if (curRound !== lastSeenRound || curTicket !== lastSeenTicketIdx) {
         // Round or ticket advanced (new_round, skip, new_session) — reset selections
         selectedSize = null; selectedConf = null; voteSent = false;
+        tiePendingSize = null; tiePendingConf = null; tieEditOpen = false;
       } else if (voteSent && !myPlayer.sizeVote && !myPlayer.confVote) {
         // Vote was previously sent but server cleared it (reset_round) — reset
         selectedSize = null; selectedConf = null; voteSent = false;
+        tiePendingSize = null; tiePendingConf = null; tieEditOpen = false;
       }
     }
     lastSeenRound     = curRound;
@@ -632,6 +641,7 @@ function onStateChange() {
     // Fully out of game — wipe vote selection state
     selectedSize = null; selectedConf = null;
     voteSent = false; lastSeenRound = null; lastSeenTicketIdx = null;
+    tiePendingSize = null; tiePendingConf = null; tieEditOpen = false;
     // NOTE: prevSetupDone is intentionally NOT reset here so the flip
     // detection below can fire correctly on the next state update.
   }
@@ -909,61 +919,104 @@ function renderResultBanner() {
     }
   }
 
-  // Tie resolution section (admin only)
+  // Tie resolution / score selection section (admin only)
   var tieSection = document.getElementById('tie-section');
   if (tieSection) {
     var tieHTML = '';
     if (isAdmin) {
-      if (game.sizeTie && !game.agreedSize) {
-        tieHTML += buildTiePicker('size', 'Size is tied — choose one:', SIZE_OPTIONS, 'size');
-      }
-      if (game.confTie && !game.agreedConf) {
-        tieHTML += buildTiePicker('conf', 'Confidence is tied — choose one:', CONF_OPTIONS, 'conf');
-      }
-      // Edit button when agreed but no active tie
-      if (game.agreedSize && game.agreedConf && !game.sizeTie && !game.confTie) {
-        tieHTML += '<div style="margin-top:8px;text-align:center">'
+      var needsTie = (game.sizeTie && !game.agreedSize) || (game.confTie && !game.agreedConf);
+      if (needsTie) {
+        // Initialise pending from server state on first render of this state
+        if (tiePendingSize === null) tiePendingSize = game.agreedSize || game.majoritySize || null;
+        if (tiePendingConf === null) tiePendingConf = game.agreedConf || game.majorityConf || null;
+        tieHTML = buildAdminPickerPanel(tiePendingSize, tiePendingConf, 'tie');
+      } else if (game.agreedSize && game.agreedConf && !game.sizeTie && !game.confTie) {
+        // Edit button — expands same two-picker panel pre-filled with current values
+        tieHTML = '<div style="margin-top:8px;text-align:center">'
           + '<span id="edit-score-toggle" style="cursor:pointer;font-size:12px;color:var(--orange);letter-spacing:1px">✏️ Edit</span>'
-          + '<div id="edit-score-picker" style="display:none;margin-top:8px">'
-          + buildTiePicker('size', 'Change Size:', SIZE_OPTIONS, 'edit_size')
-          + buildTiePicker('conf', 'Change Confidence:', CONF_OPTIONS, 'edit_conf')
-          + '</div>'
+          + (tieEditOpen ? buildAdminPickerPanel(tiePendingSize || game.agreedSize, tiePendingConf || game.agreedConf, 'edit') : '')
           + '</div>';
       }
     }
     tieSection.innerHTML = tieHTML;
 
-    // Wire up tie buttons
+    // Wire up selection highlight buttons (no immediate send)
     tieSection.querySelectorAll('.tie-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        var type = btn.dataset.type;
-        var val  = btn.dataset.val;
-        var ab = document.getElementById('admin-btns');
-        if (ab) ab.dataset.ids = '';
-        if (type === 'size' || type === 'edit_size') send('set_agreed', { size: val });
-        else if (type === 'conf' || type === 'edit_conf') send('set_agreed', { conf: val });
+        var picker = btn.dataset.picker;
+        var val    = btn.dataset.val;
+        if (picker === 'size') tiePendingSize = val;
+        else if (picker === 'conf') tiePendingConf = val;
+        renderResultBanner();
       });
     });
 
-    // Edit toggle
+    // Wire up Submit button (tie mode)
+    var tieSubmit = document.getElementById('tie-submit-btn');
+    if (tieSubmit) {
+      tieSubmit.addEventListener('click', function() {
+        if (!tiePendingSize || !tiePendingConf) return;
+        var ab = document.getElementById('admin-btns');
+        if (ab) ab.dataset.ids = '';
+        send('set_agreed', { size: tiePendingSize, conf: tiePendingConf });
+        tiePendingSize = null; tiePendingConf = null;
+      });
+    }
+
+    // Wire up Submit button (edit mode)
+    var editSubmit = document.getElementById('edit-submit-btn');
+    if (editSubmit) {
+      editSubmit.addEventListener('click', function() {
+        if (!tiePendingSize || !tiePendingConf) return;
+        var ab = document.getElementById('admin-btns');
+        if (ab) ab.dataset.ids = '';
+        send('set_agreed', { size: tiePendingSize, conf: tiePendingConf });
+        tiePendingSize = null; tiePendingConf = null; tieEditOpen = false;
+      });
+    }
+
+    // Edit toggle open/close
     var editToggle = document.getElementById('edit-score-toggle');
-    var editPicker = document.getElementById('edit-score-picker');
-    if (editToggle && editPicker) {
+    if (editToggle) {
       editToggle.addEventListener('click', function() {
-        editPicker.style.display = editPicker.style.display === 'none' ? 'block' : 'none';
+        if (tieEditOpen) {
+          tieEditOpen = false;
+          tiePendingSize = null; tiePendingConf = null;
+        } else {
+          tieEditOpen = true;
+          tiePendingSize = game.agreedSize;
+          tiePendingConf = game.agreedConf;
+        }
+        renderResultBanner();
       });
     }
   }
 }
 
-function buildTiePicker(type, title, options, action) {
-  var btns = options.map(function(o) {
-    return '<button class="tie-btn" data-type="' + action + '" data-val="' + esc(o.value) + '">'
-      + esc(o.label)
-      + '<span class="tie-btn-sub">' + esc(o.sub) + '</span>'
-      + '</button>';
+function buildAdminPickerPanel(pendingSize, pendingConf, mode) {
+  var sizeBtns = SIZE_OPTIONS.map(function(o) {
+    var sel = pendingSize === o.value ? ' selected' : '';
+    return '<button class="tie-btn' + sel + '" data-picker="size" data-val="' + esc(o.value) + '">'
+      + esc(o.label) + '<span class="tie-btn-sub">' + esc(o.sub) + '</span></button>';
   }).join('');
-  return '<div class="tie-picker"><div class="tie-title">🔀 ' + title + '</div><div class="tie-btns">' + btns + '</div></div>';
+  var confBtns = CONF_OPTIONS.map(function(o) {
+    var sel = pendingConf === o.value ? ' selected' : '';
+    return '<button class="tie-btn' + sel + '" data-picker="conf" data-val="' + esc(o.value) + '">'
+      + esc(o.label) + '<span class="tie-btn-sub">' + esc(o.sub) + '</span></button>';
+  }).join('');
+  var canSubmit = !!(pendingSize && pendingConf);
+  var submitId  = mode === 'edit' ? 'edit-submit-btn' : 'tie-submit-btn';
+  var title     = mode === 'edit' ? '✏️ Edit Scores' : '🔀 Select Final Scores';
+  return '<div class="tie-picker" style="margin-top:' + (mode === 'edit' ? '10px' : '10px') + '">'
+    + '<div class="tie-title">' + title + '</div>'
+    + '<div class="admin-selector-grid">'
+    + '<div class="admin-selector-col"><div class="tie-col-title">Size Estimation</div><div class="tie-btns">' + sizeBtns + '</div></div>'
+    + '<div class="admin-selector-col"><div class="tie-col-title">Confidence Level</div><div class="tie-btns">' + confBtns + '</div></div>'
+    + '</div>'
+    + '<div style="text-align:center;margin-top:10px">'
+    + '<button id="' + submitId + '" class="btn btn-orange btn-sm"' + (canSubmit ? '' : ' disabled') + '>✅ Submit Selections</button>'
+    + '</div>'
+    + '</div>';
 }
 
 /* ── Voting panel ─────────────────────────────────────────────────────────── */
