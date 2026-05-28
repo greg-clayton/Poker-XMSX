@@ -1020,8 +1020,7 @@ function renderPlayerList() {
 
   var nonAdmin = game.players.filter(function(p) { return p.id !== game.adminId; });
   var voted    = nonAdmin.filter(function(p) { return p.sizeVote && p.confVote; }).length;
-  // Denominator = voting players only (admin can't vote, so never counts toward total)
-  if (label) label.textContent = 'The Clowder (' + voted + '/' + nonAdmin.length + ') 🐱';
+  if (label) label.textContent = 'The Clowder (' + voted + '/' + game.players.length + ') 🐱';
 
   var html = '';
   game.players.forEach(function(p) {
