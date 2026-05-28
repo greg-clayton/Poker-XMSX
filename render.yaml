@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: story-point-poker-xmsx
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: PORT
+        value: 3000
