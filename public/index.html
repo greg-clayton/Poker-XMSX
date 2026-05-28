@@ -1910,7 +1910,7 @@ function runDogChaseEvent(dir, passIndex) {
     if (!el) return;
     var html = CLOCKS.map(function(c) {
       var t = new Date().toLocaleTimeString('en-GB', { timeZone: c.tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false });
-      return '<span class="badge" style="font-size:11px;padding:3px 8px;white-space:nowrap">' + c.label + ' ' + t + '</span>';
+      return '<span class="badge" style="font-size:11px;padding:3px 8px;white-space:nowrap;min-width:7.5em;display:inline-block;text-align:center;font-variant-numeric:tabular-nums;font-family:\'DM Sans\',monospace">' + c.label + ' ' + t + '</span>';
     }).join('');
     if (el.innerHTML !== html) el.innerHTML = html;
   }
