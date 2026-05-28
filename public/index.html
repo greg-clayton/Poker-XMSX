@@ -723,10 +723,10 @@ function renderJoinScreen() {
     pc.textContent = n ? (n + ' cat' + (n > 1 ? 's' : '') + ' in the clowder') : '';
   }
 
-  // Active session banner
+  // Active session banner — only show when admin toggle is ticked
   var hasActive = !!(game && game.setupDone && !game.showSummary);
   var banner    = document.getElementById('prev-session-banner');
-  if (banner) banner.style.display = hasActive ? 'block' : 'none';
+  if (banner) banner.style.display = (hasActive && wantAdmin) ? 'block' : 'none';
 
   // Previous (completed) session panel
   var lsp = document.getElementById('last-session-panel');
@@ -1728,6 +1728,10 @@ function animChasePass(msg) {
       adminBox.style.background    = wantAdmin ? 'var(--orange)' : 'rgba(0,0,0,0.3)';
       adminBox.style.borderColor   = wantAdmin ? 'var(--orange)' : 'rgba(201,160,245,0.5)';
       if (adminTick) adminTick.style.display = wantAdmin ? 'flex' : 'none';
+      // Sync active-session banner with toggle state
+      var hasActive = !!(game && game.setupDone && !game.showSummary);
+      var b = document.getElementById('prev-session-banner');
+      if (b) b.style.display = (hasActive && wantAdmin) ? 'block' : 'none';
     });
   }
   if (joinBtn) {
