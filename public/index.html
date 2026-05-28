@@ -1094,8 +1094,10 @@ function renderDistribution() {
 }
 
 /* ── Admin controls ───────────────────────────────────────────────────────── */
-var finishConfirm = false;
-var skipConfirm   = false;
+var finishConfirm     = false;
+var skipConfirm       = false;
+var resetConfirm      = false;
+var newSessionConfirm = false;
 
 function renderAdminControls() {
   var leftCol = document.getElementById('left-col');
@@ -1149,19 +1151,27 @@ function renderAdminControls() {
     btn.addEventListener('click', function() {
       if (spec.action === 'reveal')      { send('reveal'); }
       else if (spec.action === 'new_round') { send('new_round'); }
-      else if (spec.action === 'reset_round') { send('reset_round'); }
-      else if (spec.action === 'new_session')  { send('new_session'); }
       else if (spec.action === 'help')    { startTour(); }
       else if (spec.action === 'view_summary') { openSummaryModal(); }
+      else if (spec.action === 'reset_round') {
+        if (resetConfirm) return;
+        resetConfirm = true;
+        showInlineConfirm(btn, 'Reset?', function() { resetConfirm = false; ab.dataset.ids = ''; send('reset_round'); }, function() { resetConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
+      }
+      else if (spec.action === 'new_session') {
+        if (newSessionConfirm) return;
+        newSessionConfirm = true;
+        showInlineConfirm(btn, 'New Session?', function() { newSessionConfirm = false; ab.dataset.ids = ''; send('new_session'); }, function() { newSessionConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
+      }
       else if (spec.action === 'skip_ticket') {
         if (skipConfirm) return;
         skipConfirm = true;
-        showInlineConfirm(btn, 'Skip?', function() { skipConfirm = false; send('skip_ticket'); }, function() { skipConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
+        showInlineConfirm(btn, 'Skip?', function() { skipConfirm = false; ab.dataset.ids = ''; send('skip_ticket'); }, function() { skipConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
       }
       else if (spec.action === 'show_summary') {
         if (finishConfirm) return;
         finishConfirm = true;
-        showInlineConfirm(btn, 'Finish?', function() { finishConfirm = false; send('show_summary'); }, function() { finishConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
+        showInlineConfirm(btn, 'Finish?', function() { finishConfirm = false; ab.dataset.ids = ''; send('show_summary'); }, function() { finishConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
       }
       else if (spec.action === 'reset') {
         if (btn.dataset.confirm) { send('reset'); btn.dataset.confirm = ''; }
@@ -1177,7 +1187,10 @@ function showInlineConfirm(anchorBtn, confirmText, onConfirm, onCancel) {
   sureBtn.className = 'btn btn-danger btn-sm'; sureBtn.textContent = confirmText;
   var cancelBtn = document.createElement('button');
   cancelBtn.className = 'btn btn-subtle btn-sm'; cancelBtn.textContent = 'Cancel';
-  sureBtn.addEventListener('click', onConfirm);
+  sureBtn.addEventListener('click', function() {
+    sureBtn.remove(); cancelBtn.remove(); // always clean up before acting
+    if (onConfirm) onConfirm();
+  });
   cancelBtn.addEventListener('click', function() { sureBtn.remove(); cancelBtn.remove(); if (onCancel) onCancel(); });
   anchorBtn.parentNode.insertBefore(sureBtn, anchorBtn.nextSibling);
   anchorBtn.parentNode.insertBefore(cancelBtn, sureBtn.nextSibling);
@@ -1361,7 +1374,7 @@ function showTourStep(i) {
   if (prev) prev.style.display = i === 0 ? 'none' : '';
   if (next) next.textContent = i === TOUR_STEPS.length - 1 ? 'Done ✓' : 'Next →';
 
-  // Spotlight
+  // Spotlight — position:fixed so coords are viewport-relative (no scrollY)
   if (spot && step.target) {
     var el = document.getElementById(step.target);
     if (el) {
@@ -1369,7 +1382,7 @@ function showTourStep(i) {
       var pad = 8;
       spot.style.display = '';
       spot.style.left    = (r.left - pad) + 'px';
-      spot.style.top     = (r.top  - pad + window.scrollY) + 'px';
+      spot.style.top     = (r.top  - pad) + 'px';
       spot.style.width   = (r.width  + pad*2) + 'px';
       spot.style.height  = (r.height + pad*2) + 'px';
     } else {
@@ -1377,20 +1390,22 @@ function showTourStep(i) {
     }
   }
 
-  // Position card: below target, clamped to viewport
+  // Position card: below target, clamped to viewport (position:fixed — no scrollY)
   if (step.target) {
     var tEl = document.getElementById(step.target);
     if (tEl) {
       var tr   = tEl.getBoundingClientRect();
       var cw   = card.offsetWidth  || 280;
       var ch   = card.offsetHeight || 220;
-      var desT = tr.bottom + 16 + window.scrollY;
-      if (desT + ch > window.innerHeight + window.scrollY - 20) desT = tr.top - ch - 16 + window.scrollY;
+      var desT = tr.bottom + 16;
+      if (desT + ch > window.innerHeight - 20) desT = tr.top - ch - 16;
+      desT = Math.max(8, desT);
       var desL = tr.left + (tr.width / 2) - (cw / 2);
       desL = Math.max(12, Math.min(desL, window.innerWidth - cw - 12));
       card.style.top  = desT + 'px';
       card.style.left = desL + 'px';
       card.style.bottom = 'auto'; card.style.right = 'auto';
+      card.style.transform = 'none';
     }
   } else {
     card.style.top = '50%'; card.style.left = '50%';
