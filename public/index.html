@@ -449,6 +449,7 @@ var ws                = null;
 var lastGameJson      = '';
 var summaryOpen       = false;
 var prevInGame        = false; // tracks previous inGame state to detect server-side kicks
+var prevSetupDone     = false; // tracks previous setupDone to detect new-session transitions
 var voteSent          = false; // true after tryAutoVote fires successfully this round
 var lastSeenRound     = null;  // used to detect round/ticket advances
 var lastSeenTicketIdx = null;
@@ -631,6 +632,7 @@ function onStateChange() {
     // Fully out of game — wipe everything
     selectedSize = null; selectedConf = null;
     voteSent = false; lastSeenRound = null; lastSeenTicketIdx = null;
+    prevSetupDone = false;
   }
 
   prevInGame = inGame;
@@ -670,6 +672,13 @@ function onStateChange() {
 
   // We're in the game
   setInSession(true);
+
+  // When setupDone flips true → false (new_session / reset) clear the local
+  // ticket list so the admin always starts with a blank setup screen.
+  if (prevSetupDone && !game.setupDone) {
+    setupTickets = [];
+  }
+  prevSetupDone = !!game.setupDone;
 
   if (!game.setupDone) {
     if (isAdmin) {
