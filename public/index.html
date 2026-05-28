@@ -742,21 +742,24 @@ function renderTicketBadge() {
 function renderBasket() {
   var container = document.getElementById('basket-seats');
   if (!container) return;
-  var nonAdmins = game.players.filter(function(p) { return p.id !== game.adminId; });
-  var total = nonAdmins.length;
+  var allPlayers = game.players;
+  var total = allPlayers.length;
   var html  = '';
-  nonAdmins.forEach(function(p, i) {
+  allPlayers.forEach(function(p, i) {
     var angle = (2 * Math.PI * i / Math.max(total, 1)) - Math.PI / 2;
     var rx = 42, ry = 38;
     var cx = 50 + rx * Math.cos(angle);
     var cy = 50 + ry * Math.sin(angle);
-    var toy    = TOYS[i % TOYS.length];
-    var voted  = !!(p.sizeVote && p.confVote);
-    var isMe   = p.id === myId;
-    var classes = 'basket-seat' + (voted ? ' voted' : '') + (isMe ? ' me' : '');
-    var nudgeable = !voted && !game.revealed && game.adminId === myId ? ' nudgeable' : '';
+    var toy      = TOYS[i % TOYS.length];
+    var isAdmin  = p.id === game.adminId;
+    var voted    = !!(p.sizeVote && p.confVote);
+    var isMe     = p.id === myId;
+    var classes  = 'basket-seat' + (voted ? ' voted' : '') + (isMe ? ' me' : '');
+    var nudgeable = !isAdmin && !voted && !game.revealed && game.adminId === myId ? ' nudgeable' : '';
     var seatVote = '';
-    if (game.revealed && p.sizeVote) {
+    if (isAdmin) {
+      seatVote = '<div class="seat-vote">👑</div>';
+    } else if (game.revealed && p.sizeVote) {
       var sAbbr = p.sizeVote === 'Medium' ? 'M' : p.sizeVote === 'Small' ? 'S' : p.sizeVote === 'Large' ? 'L' : 'XL';
       var cAbbr = p.confVote === 'High' ? 'H' : p.confVote === 'Medium' ? 'M' : 'L';
       seatVote = '<div class="seat-vote">' + sAbbr + '·' + cAbbr + '</div>';
@@ -998,7 +1001,7 @@ function renderPlayerList() {
   var nonAdmin = game.players.filter(function(p) { return p.id !== game.adminId; });
   var total    = game.players.length;
   var voted    = nonAdmin.filter(function(p) { return p.sizeVote && p.confVote; }).length;
-  if (label) label.textContent = 'The Clowder (' + voted + '/' + nonAdmin.length + ') 🐱';
+  if (label) label.textContent = 'The Clowder (' + voted + '/' + total + ') 🐱';
 
   var html = '';
   game.players.forEach(function(p) {
