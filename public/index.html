@@ -498,13 +498,15 @@ function connect() {
 
   ws.onopen = function() {
     setConn(true);
-    // If we have saved session credentials and there's an active game, auto-rejoin.
-    // Only claim admin if the server already recognises this ID as admin.
+    // If we have saved session credentials and are already past the join screen,
+    // re-send a join to restore server-side state (e.g. after a WS reconnect).
+    // Admin status is derived from what the server currently holds — never assumed.
     if (myId && myName && !hasLeft) {
       var screen = currentScreen();
       if (screen !== 'join-screen') {
-        var stillAdmin = !!(game && game.adminId === myId);
-        send('join', { name: myName, wantAdmin: stillAdmin });
+        var serverAdmin = game && game.adminId;
+        var claimAdmin  = serverAdmin === myId; // only if server already knows us as admin
+        send('join', { name: myName, wantAdmin: claimAdmin });
       }
     }
   };
@@ -590,11 +592,19 @@ function onStateChange() {
     // Not yet in the game — decide which screen to show
     if (game.setupDone && !game.showSummary) {
       // Active session running — check if we should auto-rejoin.
-      // Only reclaim admin if server already has this ID as admin.
       if (myId && myName && !hasLeft && isInSession()) {
-        var stillAdmin = !!(game && game.adminId === myId);
-        send('join', { name: myName, wantAdmin: stillAdmin });
-        return;
+        var serverAdmin = game.adminId;
+        if (serverAdmin === myId) {
+          // Server already knows us as admin — reclaim it silently.
+          send('join', { name: myName, wantAdmin: true });
+          return;
+        } else if (serverAdmin && serverAdmin !== myId) {
+          // Someone else is admin — rejoin as regular player silently.
+          send('join', { name: myName, wantAdmin: false });
+          return;
+        }
+        // Admin slot is vacant (server restart / admin left) — fall through
+        // to the join screen so the user can decide whether to claim admin.
       }
       // Show join with warning banner
       renderJoinScreen();
