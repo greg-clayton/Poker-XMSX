@@ -1633,11 +1633,10 @@ function runMouseAnimation() {
   if (!mouse || !cheese) return;
 
   var cheeseRect = cheese.getBoundingClientRect();
-  var cheeseX    = cheeseRect.left;
   var cheeseY    = cheeseRect.top + cheeseRect.height / 2;
   var sw         = window.innerWidth;
 
-  // Phase 1: mouse runs in from right toward the cheese
+  // Phase 1: mouse runs in from right — stops just as its nose reaches the cheese
   setMouse('🐁');
   mouse.style.display    = 'inline-block';
   mouse.style.transform  = 'scaleX(1)';
@@ -1646,7 +1645,7 @@ function runMouseAnimation() {
   mouse.style.transition = 'none';
   requestAnimationFrame(function() { requestAnimationFrame(function() {
     mouse.style.transition = 'left 1.5s linear';
-    mouse.style.left = (cheeseX - 24) + 'px';
+    mouse.style.left = cheeseRect.right + 'px'; // head arrives at cheese's right edge
   }); });
 
   // Phase 2: grab cheese
@@ -1674,7 +1673,7 @@ function runCatChase() {
   if (!mouse || !cat || !cheese) return;
 
   var cheeseRect = cheese.getBoundingClientRect();
-  var sniffX     = cheeseRect.left - 20;
+  var sniffX     = cheeseRect.right; // mouse arrives from right, nose at cheese's right edge
   var sniffY     = cheeseRect.top  - 10;
   var sw         = window.innerWidth;
   var duration   = Math.max(1200, sw * 1.2);
