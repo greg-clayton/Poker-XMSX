@@ -437,18 +437,21 @@ var CONF_MAP = {}; CONF_OPTIONS.forEach(function(o) { CONF_MAP[o.value] = o; });
 var TOYS = ['🐟','🐠','🎾','🧶','🪀','🧸','🎯','🃏','🎀','🌟','🍀','🎲','🦋','🌈','⭐','🍩'];
 
 /* ── App state ──────────────────────────────────────────────────────────── */
-var game         = null;
-var lastSession  = null;
-var myId         = null;
-var myName       = null;
-var wantAdmin    = false;
-var hasLeft      = false;
-var selectedSize = null;
-var selectedConf = null;
-var ws           = null;
-var lastGameJson = '';
-var summaryOpen  = false;
-var prevInGame   = false; // tracks previous inGame state to detect server-side kicks
+var game              = null;
+var lastSession       = null;
+var myId              = null;
+var myName            = null;
+var wantAdmin         = false;
+var hasLeft           = false;
+var selectedSize      = null;
+var selectedConf      = null;
+var ws                = null;
+var lastGameJson      = '';
+var summaryOpen       = false;
+var prevInGame        = false; // tracks previous inGame state to detect server-side kicks
+var voteSent          = false; // true after tryAutoVote fires successfully this round
+var lastSeenRound     = null;  // used to detect round/ticket advances
+var lastSeenTicketIdx = null;
 
 /* ── Generate a unique ID ────────────────────────────────────────────────── */
 function uid() {
@@ -593,6 +596,43 @@ function onStateChange() {
   if (prevInGame && !inGame) {
     setInSession(false);
   }
+
+  // ── Selection state management ──────────────────────────────────────────
+  // selectedSize/Conf must be cleared on fresh join, new round, ticket advance,
+  // and reset-round — otherwise old highlights bleed across rounds/sessions.
+  var myPlayer = game.players ? game.players.find(function(p) { return p.id === myId; }) : null;
+
+  if (!prevInGame && inGame) {
+    // Just joined the game — always start with a clean slate
+    selectedSize = null; selectedConf = null;
+    voteSent = false; lastSeenRound = null; lastSeenTicketIdx = null;
+  }
+
+  if (inGame && myPlayer) {
+    var curRound  = game.round || 1;
+    var curTicket = game.ticketIndex || 0;
+    if (lastSeenRound !== null) {
+      if (curRound !== lastSeenRound || curTicket !== lastSeenTicketIdx) {
+        // Round or ticket advanced (new_round, skip, new_session) — reset selections
+        selectedSize = null; selectedConf = null; voteSent = false;
+      } else if (voteSent && !myPlayer.sizeVote && !myPlayer.confVote) {
+        // Vote was previously sent but server cleared it (reset_round) — reset
+        selectedSize = null; selectedConf = null; voteSent = false;
+      }
+    }
+    lastSeenRound     = curRound;
+    lastSeenTicketIdx = curTicket;
+    // Sync confirmed server votes back to local (handles reconnect mid-session)
+    if (myPlayer.sizeVote) { selectedSize = myPlayer.sizeVote; voteSent = true; }
+    if (myPlayer.confVote) { selectedConf = myPlayer.confVote; voteSent = true; }
+  }
+
+  if (!inGame) {
+    // Fully out of game — wipe everything
+    selectedSize = null; selectedConf = null;
+    voteSent = false; lastSeenRound = null; lastSeenTicketIdx = null;
+  }
+
   prevInGame = inGame;
 
   // If game is in summary, open modal (handled separately via show_summary event)
@@ -929,12 +969,6 @@ function renderVotingPanel() {
   var myPlayer = game.players.find(function(p) { return p.id === myId; });
   var voted    = !!(myPlayer && myPlayer.sizeVote && myPlayer.confVote);
 
-  // Sync selectedSize/Conf from server state (handles reconnect)
-  if (myPlayer) {
-    if (myPlayer.sizeVote && !selectedSize) selectedSize = myPlayer.sizeVote;
-    if (myPlayer.confVote && !selectedConf) selectedConf = myPlayer.confVote;
-  }
-
   var disabled = game.revealed || voted;
 
   // Render size grid
@@ -1018,6 +1052,7 @@ function renderVotingPanel() {
 function tryAutoVote() {
   if (selectedSize && selectedConf && !game.revealed) {
     send('vote', { size: selectedSize, conf: selectedConf });
+    voteSent = true;
   }
 }
 
