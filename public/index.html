@@ -1179,7 +1179,8 @@ function renderAdminControls() {
     if (!game.revealed) {
       btns.push({ id: 'btn-reveal', label: '🐾 Reveal Paws', cls: 'btn-purple', action: 'reveal', disabled: !anyVoted });
     }
-    if (game.revealed && fullyAgreed) {
+    var hasMoreTickets = game.tickets && (game.ticketIndex + 1) < game.tickets.length;
+    if (game.revealed && fullyAgreed && hasMoreTickets) {
       btns.push({ id: 'btn-next', label: '🐁 Next Round', cls: 'btn-orange', action: 'new_round' });
     }
     if (game.ticket && game.ticket.label) {
