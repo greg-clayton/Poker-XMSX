@@ -462,6 +462,7 @@ var lastSeenTicketIdx = null;
 var tiePendingSize    = null;  // admin's locally-highlighted size choice (pre-submit)
 var tiePendingConf    = null;  // admin's locally-highlighted conf choice (pre-submit)
 var tieEditOpen       = false; // whether the ✏️ Edit picker is expanded
+var cheeseGrabbed     = false; // local animation state — cheese stolen mid-animation
 
 /* ── Generate a unique ID ────────────────────────────────────────────────── */
 function uid() {
@@ -591,6 +592,7 @@ function onStateChange() {
   // --- Update cheese visual ---
   var cheeseEl = document.getElementById('cheese');
   if (cheeseEl) cheeseEl.style.opacity = game.cheeseGone ? '0' : '1';
+  cheeseGrabbed = !!(game.cheeseGone);
 
   // --- Update round label ---
   var rl = document.getElementById('round-label');
@@ -1597,89 +1599,303 @@ function showNudge(name) {
 /* ═══════════════════════════════════════════════════════════════════════════
    ANIMATION (cat chase / cheese)
    ═══════════════════════════════════════════════════════════════════════════ */
+
+function seededRand(seed) {
+  var s = (seed ^ 0xdeadbeef) >>> 0;
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b) >>> 0;
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b) >>> 0;
+  return (s ^ (s >>> 16)) / 0xffffffff;
+}
+
+function setMouse(body) {
+  var ms = document.getElementById('mouse-sprite');
+  if (ms) ms.textContent = body;
+}
+
+function getCheeseY() {
+  var c = document.getElementById('cheese');
+  return c ? c.getBoundingClientRect().top - 4 : 60;
+}
+
 function handleAnimate(msg) {
   if (msg.act === 'mouse_steal') {
     var cheese = document.getElementById('cheese');
     if (cheese) cheese.style.opacity = '0';
-    animMouse(msg);
+    runMouseAnimation();
   } else if (msg.act === 'cat_chase') {
-    animCatChase();
+    runCatChase();
   } else if (msg.act === 'chase_pass') {
-    animChasePass(msg);
+    runChasePass(msg.dir, msg.passIndex);
   }
 }
 
-function animMouse(msg) {
-  var sprite = document.getElementById('mouse-sprite');
-  if (!sprite) return;
-  sprite.textContent = '🐭🧀';
-  sprite.style.display = 'block';
-  var startX = window.innerWidth + 40;
-  var endX   = -80;
-  var y      = Math.random() * (window.innerHeight * 0.6) + window.innerHeight * 0.1;
-  sprite.style.top  = y + 'px';
-  sprite.style.left = startX + 'px';
-  sprite.style.transform = 'scaleX(-1)';
-  var duration = 2500;
-  var start    = null;
-  function step(ts) {
-    if (!start) start = ts;
-    var progress = Math.min((ts - start) / duration, 1);
-    sprite.style.left = (startX + (endX - startX) * progress) + 'px';
-    if (progress < 1) requestAnimationFrame(step);
-    else sprite.style.display = 'none';
-  }
-  requestAnimationFrame(step);
+function runMouseAnimation() {
+  var mouse  = document.getElementById('mouse-sprite');
+  var cheese = document.getElementById('cheese');
+  if (!mouse || !cheese) return;
+
+  var cheeseRect = cheese.getBoundingClientRect();
+  var cheeseX    = cheeseRect.left;
+  var cheeseY    = cheeseRect.top + cheeseRect.height / 2;
+  var sw         = window.innerWidth;
+
+  // Phase 1: mouse runs in from right toward the cheese
+  setMouse('🐁');
+  mouse.style.display    = 'inline-block';
+  mouse.style.transform  = 'scaleX(1)';
+  mouse.style.left       = (sw + 30) + 'px';
+  mouse.style.top        = (cheeseY - 14) + 'px';
+  mouse.style.transition = 'none';
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    mouse.style.transition = 'left 1.5s linear';
+    mouse.style.left = (cheeseX - 24) + 'px';
+  }); });
+
+  // Phase 2: grab cheese
+  setTimeout(function() { cheese.style.opacity = '0'; cheeseGrabbed = true; }, 1600);
+
+  // Phase 3: mouse runs back right carrying cheese
+  setTimeout(function() {
+    setMouse('🧀🐁');
+    mouse.style.transition = 'none';
+    mouse.style.transform  = 'scaleX(-1)';
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+      mouse.style.transition = 'left 1.5s linear';
+      mouse.style.left = (sw + 60) + 'px';
+    }); });
+  }, 1900);
+
+  // Phase 4: clean up — cat_chase arrives from server ~30s later
+  setTimeout(function() { mouse.style.display = 'none'; }, 3600);
 }
 
-function animCatChase() {
-  var cat   = document.getElementById('cat-chaser');
-  var mouse = document.getElementById('mouse-sprite');
-  if (!cat) return;
-  cat.style.display = 'block';
-  var y = Math.random() * (window.innerHeight * 0.6) + window.innerHeight * 0.1;
-  cat.style.top = y + 'px';
-  cat.style.left = (window.innerWidth + 40) + 'px';
-  cat.style.transform = 'scaleX(-1)';
-  var duration = 2000;
-  var start = null;
-  var endX  = -60;
-  function step(ts) {
-    if (!start) start = ts;
-    var p = Math.min((ts - start) / duration, 1);
-    cat.style.left = (window.innerWidth + 40 + (endX - window.innerWidth - 40) * p) + 'px';
-    if (p < 1) requestAnimationFrame(step);
-    else cat.style.display = 'none';
-  }
-  requestAnimationFrame(step);
-}
+function runCatChase() {
+  var mouse  = document.getElementById('mouse-sprite');
+  var cat    = document.getElementById('cat-chaser');
+  var cheese = document.getElementById('cheese');
+  if (!mouse || !cat || !cheese) return;
 
-function animChasePass(msg) {
-  var cat = document.getElementById('cat-chaser');
-  var dog = document.getElementById('dog-chaser');
-  if (!cat || !dog) return;
-  var rtl = msg.dir === 'left';
-  var startX = rtl ? window.innerWidth + 40 : -80;
-  var endX   = rtl ? -80 : window.innerWidth + 40;
-  var y      = window.innerHeight * 0.7 + (msg.passIndex % 3) * 30;
-  [cat, dog].forEach(function(el, i) {
+  var cheeseRect = cheese.getBoundingClientRect();
+  var sniffX     = cheeseRect.left - 20;
+  var sniffY     = cheeseRect.top  - 10;
+  var sw         = window.innerWidth;
+  var duration   = Math.max(1200, sw * 1.2);
+
+  // Mouse sneaks in from right toward cheese spot
+  setMouse('🐁');
+  mouse.style.display    = 'inline-block';
+  mouse.style.transform  = 'scaleX(1)';
+  mouse.style.left       = (sw + 30) + 'px';
+  mouse.style.top        = sniffY + 'px';
+  mouse.style.transition = 'none';
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    mouse.style.transition = 'left 2s linear';
+    mouse.style.left = sniffX + 'px';
+  }); });
+
+  setTimeout(function() { setMouse('🐁'); }, 2100);
+
+  // Cat bursts in from the left
+  setTimeout(function() {
+    cat.textContent      = '🐈';
+    cat.style.display    = 'inline-block';
+    cat.style.transform  = 'scaleX(-1)';
+    cat.style.left       = '-60px';
+    cat.style.top        = (sniffY - 4) + 'px';
+    cat.style.transition = 'none';
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+      cat.style.transition = 'left ' + (duration / 1000 * 0.55) + 's linear';
+      cat.style.left = (sniffX - 40) + 'px';
+    }); });
+  }, 2500);
+
+  // Cat reaches mouse — mouse turns and flees right, cat gives chase
+  var fleeDelay = 2500 + duration * 0.55;
+  var fd = (sw + 120) / sw * 0.8;
+  setTimeout(function() {
+    cat.textContent        = '🐈';
+    mouse.style.transform  = 'scaleX(-1)';
+    mouse.style.transition = 'none';
     setTimeout(function() {
-      el.style.display = 'block';
-      el.style.top  = (y - i * 30) + 'px';
-      el.style.left = startX + 'px';
-      el.style.transform = rtl ? 'scaleX(-1)' : 'scaleX(1)';
-      var dur = 1800;
-      var st  = null;
-      function step(ts) {
-        if (!st) st = ts;
-        var p = Math.min((ts - st) / dur, 1);
-        el.style.left = (startX + (endX - startX) * p) + 'px';
-        if (p < 1) requestAnimationFrame(step);
-        else el.style.display = 'none';
-      }
-      requestAnimationFrame(step);
-    }, i * 200);
-  });
+      mouse.style.transition = 'left ' + fd + 's linear';
+      cat.style.transition   = 'left ' + (fd + 0.15) + 's linear';
+      mouse.style.left = (sw + 80) + 'px';
+      cat.style.left   = (sw + 40) + 'px';
+    }, 20);
+  }, fleeDelay);
+
+  // Clean up after flee completes
+  setTimeout(function() {
+    mouse.style.display = 'none';
+    cat.style.display   = 'none';
+  }, fleeDelay + fd * 1000 + 500);
+}
+
+function runChasePass(dir, passIndex) {
+  var r1 = seededRand(passIndex * 31 + 7);
+  var r2 = seededRand(passIndex * 31 + 13);
+
+  // 25% chance: dog chases cat instead
+  if (r1 < 0.25) { runDogChaseEvent(dir, passIndex); return; }
+
+  var mouse = document.getElementById('mouse-sprite');
+  var cat   = document.getElementById('cat-chaser');
+  if (!mouse || !cat) return;
+
+  var sw     = window.innerWidth;
+  var y      = getCheeseY();
+  var runMs  = Math.max(1500, sw * 1.8);
+  var runSec = runMs / 1000;
+  var goLeft = dir === 'left';
+
+  var mouseStart = goLeft ? sw + 50 : -50;
+  var catStart   = goLeft ? sw + 90 : -90;
+  var mouseEnd   = goLeft ? -80     : sw + 80;
+  var catEnd     = goLeft ? -50     : sw + 50;
+  var flip       = goLeft ? 'scaleX(1)' : 'scaleX(-1)';
+
+  setMouse('🐁');
+  mouse.style.display    = 'inline-block';
+  mouse.style.transform  = goLeft ? 'scaleX(1)' : 'scaleX(-1)';
+  mouse.style.top        = y + 'px';
+  mouse.style.left       = mouseStart + 'px';
+  mouse.style.transition = 'none';
+
+  cat.textContent       = '🐈';
+  cat.style.display     = 'inline-block';
+  cat.style.transform   = flip;
+  cat.style.top         = (y - 2) + 'px';
+  cat.style.left        = catStart + 'px';
+  cat.style.transition  = 'none';
+
+  // 0, 1 or 2 extra cats (seeded so all clients see the same)
+  var extraCount  = r2 < 0.25 ? 0 : r2 < 0.65 ? 1 : 2;
+  var extraEmojis = ['🐈‍⬛', '🐈'];
+  var extraEls    = [];
+  for (var i = 0; i < extraCount; i++) {
+    var el         = document.createElement('span');
+    el.textContent = extraEmojis[i];
+    var gapPx      = (i + 1) * 38;
+    var extraStart = goLeft ? catStart + gapPx : catStart - gapPx;
+    var extraEnd   = goLeft ? catEnd   + gapPx : catEnd   - gapPx;
+    el.style.cssText = 'position:fixed;font-size:20px;z-index:' + (9996 - i)
+      + ';pointer-events:none;display:inline-block;top:' + (y - 2) + 'px;left:'
+      + extraStart + 'px;transform:' + flip + ';transition:none;';
+    document.body.appendChild(el);
+    extraEls.push({ el: el, extraEnd: extraEnd });
+  }
+
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    mouse.style.transition = 'left ' + runSec + 's linear';
+    cat.style.transition   = 'left ' + (runSec + 0.2) + 's linear';
+    mouse.style.left = mouseEnd + 'px';
+    cat.style.left   = catEnd + 'px';
+    extraEls.forEach(function(item, idx) {
+      item.el.style.transition = 'left ' + (runSec + 0.35 + idx * 0.12) + 's linear';
+      item.el.style.left = item.extraEnd + 'px';
+    });
+  }); });
+
+  setTimeout(function() { setMouse('🐁'); }, runMs * 0.4);
+
+  setTimeout(function() {
+    mouse.style.display = 'none';
+    cat.style.display   = 'none';
+    extraEls.forEach(function(item) { item.el.remove(); });
+  }, runMs + 600);
+}
+
+function runDogChaseEvent(dir, passIndex) {
+  var mouse  = document.getElementById('mouse-sprite');
+  var cat    = document.getElementById('cat-chaser');
+  var dog    = document.getElementById('dog-chaser');
+  var cheese = document.getElementById('cheese');
+  if (!mouse || !cat || !dog) return;
+
+  var sw     = window.innerWidth;
+  var goLeft = dir === 'left';
+
+  var cRect  = cheese ? cheese.getBoundingClientRect() : { left: sw - 120, top: 60, height: 20 };
+  var watchX = cRect.left - 30;
+  var watchY = cRect.top  - 20;
+  var runY   = cRect.top  - 2;
+
+  var catStart  = goLeft ? sw + 60  : -60;
+  var catEnd    = goLeft ? -80      : sw + 80;
+  var dogStart  = goLeft ? sw + 110 : -110;
+  var dogEnd    = goLeft ? -120     : sw + 120;
+  var chaseFlip = goLeft ? 'scaleX(1)' : 'scaleX(-1)';
+
+  var mouseEnterX = goLeft ? -40 : sw + 40;
+  var crossMs     = Math.max(2200, sw * 2.2);
+  var crossSec    = crossMs / 1000;
+
+  // Step 1: mouse scurries toward clock area
+  setMouse('🐁');
+  mouse.style.display    = 'inline-block';
+  mouse.style.transform  = goLeft ? 'scaleX(-1)' : 'scaleX(1)';
+  mouse.style.top        = (watchY + 8) + 'px';
+  mouse.style.left       = mouseEnterX + 'px';
+  mouse.style.transition = 'none';
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    mouse.style.transition = 'left 1.1s linear, top 0.7s ease-out';
+    mouse.style.left = watchX + 'px';
+    mouse.style.top  = watchY + 'px';
+  }); });
+
+  // Step 2: mouse hops onto clock and turns to watch
+  setTimeout(function() {
+    mouse.style.transition = 'top 0.13s ease-out';
+    mouse.style.top = (watchY - 10) + 'px';
+  }, 1150);
+  setTimeout(function() {
+    mouse.style.transition = 'top 0.1s ease-in';
+    mouse.style.top = watchY + 'px';
+    mouse.style.transform = goLeft ? 'scaleX(-1)' : 'scaleX(1)';
+  }, 1300);
+
+  // Step 3: cat enters, dog hot on its heels
+  setTimeout(function() {
+    cat.textContent      = '🐈';
+    cat.style.transition = 'none';
+    cat.style.transform  = chaseFlip;
+    cat.style.top        = runY + 'px';
+    cat.style.left       = catStart + 'px';
+    cat.style.display    = 'inline-block';
+
+    dog.style.transition = 'none';
+    dog.style.transform  = chaseFlip;
+    dog.style.top        = (runY + 2) + 'px';
+    dog.style.left       = dogStart + 'px';
+    dog.style.display    = 'inline-block';
+
+    setTimeout(function() {
+      cat.style.transition = 'left ' + crossSec + 's linear';
+      dog.style.transition = 'left ' + (crossSec + 0.15) + 's linear';
+      cat.style.left = catEnd + 'px';
+      dog.style.left = dogEnd + 'px';
+    }, 20);
+  }, 1600);
+
+  // Step 4: as dog+cat pass, mouse bolts the opposite way
+  var boltAt = 1600 + crossMs * 0.45 + 1000;
+  setTimeout(function() {
+    var boltEnd = goLeft ? sw + 80 : -80;
+    mouse.style.transform  = goLeft ? 'scaleX(-1)' : 'scaleX(1)';
+    mouse.style.transition = 'none';
+    setTimeout(function() {
+      mouse.style.transition = 'left 0.85s linear, top 0.25s ease-in';
+      mouse.style.left = boltEnd + 'px';
+      mouse.style.top  = runY + 'px';
+    }, 20);
+  }, boltAt);
+
+  // Step 5: clean up
+  setTimeout(function() {
+    mouse.style.display = 'none';
+    cat.style.display   = 'none';
+    dog.style.display   = 'none';
+  }, 1600 + crossMs + 900);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
