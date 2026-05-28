@@ -201,6 +201,7 @@
   #tour-skip      { position:absolute; top:14px; right:14px; background:none; border:none; color:rgba(240,230,255,0.3); font-size:18px; cursor:pointer; line-height:1; padding:0; font-family:'DM Sans',sans-serif; }
   #tour-skip:hover { color:rgba(240,230,255,0.7); }
   @keyframes tourPop { from{opacity:0;transform:scale(0.92)} to{opacity:1;transform:scale(1)} }
+  @keyframes confettiFall { 0%{transform:translateY(-80px) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(720deg);opacity:0} }
   .tour-pop { animation:tourPop 0.3s ease forwards; }
 </style>
 </head>
@@ -443,6 +444,7 @@ var CONF_MAP = {}; CONF_OPTIONS.forEach(function(o) { CONF_MAP[o.value] = o; });
 var TOYS = ['🐟','🐠','🎾','🧶','🪀','🧸','🎯','🃏','🎀','🌟','🍀','🎲','🦋','🌈','⭐','🍩'];
 
 /* ── App state ──────────────────────────────────────────────────────────── */
+console.log('[Poker] script loaded v8');
 var game              = null;
 var lastSession       = null;
 var myId              = null;
@@ -463,6 +465,80 @@ var tiePendingSize    = null;  // admin's locally-highlighted size choice (pre-s
 var tiePendingConf    = null;  // admin's locally-highlighted conf choice (pre-submit)
 var tieEditOpen       = false; // whether the ✏️ Edit picker is expanded
 var cheeseGrabbed     = false; // local animation state — cheese stolen mid-animation
+var justKicked        = false; // set when server removes us from game (kick/end); guards auto-rejoin routing
+var celebratedKeys    = {};    // tracks which round+ticket reveals have already fired celebration
+
+/* ── Audio engine ─────────────────────────────────────────────────────────── */
+var _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx || _audioCtx.state === 'closed')
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return _audioCtx;
+}
+function scheduleSound(fn) {
+  var ctx = getAudioCtx();
+  if (ctx.state === 'suspended') ctx.resume().then(function() { fn(ctx); });
+  else fn(ctx);
+}
+function prewarmAudio() {
+  var ctx = getAudioCtx();
+  if (ctx.state === 'suspended') ctx.resume();
+}
+function playMeow() {
+  scheduleSound(function(ctx) {
+    try {
+      var DURATION = 1.1, t = ctx.currentTime + 0.02;
+      var master = ctx.createGain();
+      master.gain.setValueAtTime(0.45, t);
+      master.gain.setValueAtTime(0.45, t + DURATION - 0.15);
+      master.gain.linearRampToValueAtTime(0, t + DURATION);
+      master.connect(ctx.destination);
+      var osc = ctx.createOscillator(); var og = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(360, t); osc.frequency.linearRampToValueAtTime(800, t + 0.14);
+      osc.frequency.linearRampToValueAtTime(530, t + 0.38); osc.frequency.linearRampToValueAtTime(280, t + DURATION);
+      og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(1, t + 0.05);
+      og.gain.setValueAtTime(1, t + 0.32); og.gain.linearRampToValueAtTime(0, t + DURATION);
+      osc.connect(og); og.connect(master); osc.start(t); osc.stop(t + DURATION);
+      var osc2 = ctx.createOscillator(); var og2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(720, t); osc2.frequency.linearRampToValueAtTime(1600, t + 0.14);
+      osc2.frequency.linearRampToValueAtTime(1060, t + 0.38); osc2.frequency.linearRampToValueAtTime(560, t + DURATION);
+      og2.gain.setValueAtTime(0, t); og2.gain.linearRampToValueAtTime(0.28, t + 0.05);
+      og2.gain.linearRampToValueAtTime(0, t + DURATION);
+      osc2.connect(og2); og2.connect(master); osc2.start(t); osc2.stop(t + DURATION);
+      osc.onended = function() { try { master.disconnect(); } catch(e) {} };
+    } catch(e) { console.warn('Meow failed:', e); }
+  });
+}
+function playYawn() {
+  scheduleSound(function(ctx) {
+    try {
+      var DURATION = 1.8, t = ctx.currentTime + 0.02;
+      var master = ctx.createGain();
+      master.gain.setValueAtTime(0, t); master.gain.linearRampToValueAtTime(0.35, t + 0.3);
+      master.gain.setValueAtTime(0.35, t + DURATION - 0.3); master.gain.linearRampToValueAtTime(0, t + DURATION);
+      master.connect(ctx.destination);
+      var osc = ctx.createOscillator(); var og = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(200, t); osc.frequency.linearRampToValueAtTime(480, t + 0.7);
+      osc.frequency.linearRampToValueAtTime(560, t + 1.0); osc.frequency.linearRampToValueAtTime(180, t + DURATION);
+      og.gain.setValueAtTime(1, t);
+      osc.connect(og); og.connect(master); osc.start(t); osc.stop(t + DURATION);
+      var bufSize = ctx.sampleRate * DURATION;
+      var buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1);
+      var noise = ctx.createBufferSource(); noise.buffer = buffer;
+      var nf = ctx.createBiquadFilter(); nf.type = 'bandpass';
+      nf.frequency.setValueAtTime(400, t); nf.frequency.linearRampToValueAtTime(900, t + 0.7);
+      nf.frequency.linearRampToValueAtTime(300, t + DURATION); nf.Q.value = 1.5;
+      var ng = ctx.createGain(); ng.gain.setValueAtTime(0.15, t);
+      noise.connect(nf); nf.connect(ng); ng.connect(master); noise.start(t); noise.stop(t + DURATION);
+      osc.onended = function() { try { master.disconnect(); } catch(e) {} };
+    } catch(e) { console.warn('Yawn failed:', e); }
+  });
+}
 
 /* ── Generate a unique ID ────────────────────────────────────────────────── */
 function uid() {
@@ -607,6 +683,7 @@ function onStateChange() {
   // explicitly going through the login screen again.
   if (prevInGame && !inGame) {
     setInSession(false);
+    justKicked = true;
   }
 
   // ── Selection state management ──────────────────────────────────────────
@@ -657,6 +734,7 @@ function onStateChange() {
   // !inGame state so the flip true→false is detected on the same update.
   if (prevSetupDone && !game.setupDone) {
     setupTickets = [];
+    celebratedKeys = {};
   }
   prevSetupDone = !!game.setupDone;
 
@@ -700,6 +778,17 @@ function onStateChange() {
 
   if (!game.setupDone) {
     if (isAdmin) {
+      if (justKicked) {
+        // Server restart wiped state; we auto-rejoined into a fresh empty game.
+        // Rather than dumping the admin onto the setup screen unexpectedly,
+        // send them back to login so they can consciously start a new session.
+        justKicked = false;
+        hasLeft    = true;
+        send('leave', {});
+        setInSession(false);
+        renderJoinScreen();
+        return;
+      }
       showScreen('setup-screen');
       renderSetupScreen();
     } else {
@@ -709,6 +798,20 @@ function onStateChange() {
   }
 
   showScreen('game-screen');
+
+  // Fire celebration the first time we render a reveal for this round/ticket.
+  // This runs inside onStateChange which is ALWAYS called when the user sees
+  // the results screen — so it's guaranteed to fire when revealed=true.
+  if (game.revealed) {
+    var celebKey = (game.round || 1) + '-' + (game.ticketIndex || 0);
+    if (!celebratedKeys[celebKey]) {
+      celebratedKeys[celebKey] = true;
+      console.log('[Poker] 🎆 Celebration firing for key', celebKey);
+      launchCelebration();
+      setTimeout(playMeow, 1000);
+    }
+  }
+
   renderGameScreen();
 }
 
@@ -1267,7 +1370,7 @@ function renderAdminControls() {
     if (spec.disabled) btn.disabled = true;
 
     btn.addEventListener('click', function() {
-      if (spec.action === 'reveal')      { send('reveal'); }
+      if (spec.action === 'reveal')      { prewarmAudio(); send('reveal'); }
       else if (spec.action === 'new_round') { send('new_round'); }
       else if (spec.action === 'help')    { startTour(); }
       else if (spec.action === 'view_summary') { openSummaryModal(); }
@@ -1406,7 +1509,7 @@ function openSummaryModal() {
 
   // Fire fireworks if session just finished
   if (game && game.showSummary && scored > 0) {
-    setTimeout(launchFireworks, 300);
+    setTimeout(launchCelebration, 300);
   }
 }
 
@@ -1548,40 +1651,130 @@ function hideTour() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   FIREWORKS
+   CELEBRATION  (DOM confetti + canvas fireworks)
    ═══════════════════════════════════════════════════════════════════════════ */
-function launchFireworks() {
+
+/* ── DOM confetti — works in every browser, no canvas needed ─────────────── */
+function launchConfetti() {
+  var colors  = ['#f4a261','#e76f51','#c9a0f5','#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#fff'];
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;pointer-events:none;overflow:hidden';
+  document.body.appendChild(wrap);
+  for (var i = 0; i < 60; i++) {
+    var el   = document.createElement('div');
+    var size = 8 + Math.random() * 10;
+    var left = Math.random() * 100;
+    var del  = Math.random() * 1800;
+    var dur  = 1800 + Math.random() * 1600;
+    var col  = colors[Math.floor(Math.random() * colors.length)];
+    var shape = Math.random() > 0.5 ? '50%' : '2px';
+    el.style.cssText = 'position:absolute;width:' + size + 'px;height:' + size + 'px;'
+      + 'left:' + left + '%;top:-' + size + 'px;background:' + col + ';border-radius:' + shape + ';'
+      + 'animation:confettiFall ' + dur + 'ms ' + del + 'ms linear forwards';
+    wrap.appendChild(el);
+  }
+  setTimeout(function() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 4500);
+}
+
+/* ── Canvas fireworks — full burst sequence with trails ─────────────────── */
+var fwParticles = [];
+var fwAnimId    = null;
+var fwTimers    = [];
+var FW_COLORS   = ['#f4a261','#e76f51','#c9a0f5','#9c27b0','#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#fff'];
+
+function fwBurst(canvas, x, y) {
+  var count = 60 + Math.random() * 40;
+  for (var i = 0; i < count; i++) {
+    var angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+    var speed = 3 + Math.random() * 6;
+    fwParticles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      alpha: 1,
+      color: FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)],
+      size: 2 + Math.random() * 3,
+      gravity: 0.12 + Math.random() * 0.08,
+      trail: []
+    });
+  }
+}
+
+function fwDraw(canvas, ctx) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  fwParticles = fwParticles.filter(function(p) { return p.alpha > 0.02; });
+  for (var i = 0; i < fwParticles.length; i++) {
+    var p = fwParticles[i];
+    p.trail.push({ x: p.x, y: p.y });
+    if (p.trail.length > 6) p.trail.shift();
+    for (var t = 0; t < p.trail.length - 1; t++) {
+      ctx.beginPath();
+      ctx.strokeStyle = p.color;
+      ctx.globalAlpha = (p.alpha * t) / p.trail.length * 0.4;
+      ctx.lineWidth = p.size * 0.6;
+      ctx.moveTo(p.trail[t].x, p.trail[t].y);
+      ctx.lineTo(p.trail[t + 1].x, p.trail[t + 1].y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    p.x += p.vx; p.y += p.vy;
+    p.vy += p.gravity;
+    p.vx *= 0.98;
+    p.alpha -= 0.018;
+  }
+  ctx.globalAlpha = 1;
+  fwAnimId = requestAnimationFrame(function() { fwDraw(canvas, ctx); });
+}
+
+function launchCanvasFireworks() {
   var canvas = document.getElementById('fireworks-canvas');
+  console.log('[Poker] launchCanvasFireworks — canvas found:', !!canvas);
   if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  console.log('[Poker] canvas ctx:', !!ctx);
+  if (!ctx) return;
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
-  var ctx = canvas.getContext('2d');
+  canvas.style.transition = 'none';
   canvas.style.opacity = '1';
-  var particles = [];
-  var colors = ['#f4a261','#c9a0f5','#4caf50','#ff6b6b','#ffd700'];
-  for (var i = 0; i < 120; i++) {
-    var angle = Math.random() * Math.PI * 2;
-    var speed = Math.random() * 6 + 2;
-    particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height / 2,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 3,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      life: 1, size: Math.random() * 4 + 2 });
-  }
-  function drawFrame() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    particles.forEach(function(p) {
-      p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.015;
-      ctx.globalAlpha = Math.max(0, p.life);
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    particles = particles.filter(function(p) { return p.life > 0; });
-    if (particles.length) requestAnimationFrame(drawFrame);
-    else { ctx.globalAlpha = 1; canvas.style.opacity = '0'; }
-  }
-  requestAnimationFrame(drawFrame);
+  fwParticles = [];
+  fwTimers.forEach(clearTimeout);
+  cancelAnimationFrame(fwAnimId);
+
+  var w = canvas.width, h = canvas.height;
+  var launches = [
+    { x: w * 0.2,  y: h * 0.3,  delay: 0    },
+    { x: w * 0.8,  y: h * 0.25, delay: 200  },
+    { x: w * 0.5,  y: h * 0.2,  delay: 400  },
+    { x: w * 0.15, y: h * 0.45, delay: 600  },
+    { x: w * 0.85, y: h * 0.4,  delay: 700  },
+    { x: w * 0.35, y: h * 0.15, delay: 900  },
+    { x: w * 0.65, y: h * 0.22, delay: 1100 },
+    { x: w * 0.5,  y: h * 0.35, delay: 1400 }
+  ];
+  fwTimers = launches.map(function(l) {
+    return setTimeout(function() { fwBurst(canvas, l.x, l.y); }, l.delay);
+  });
+  fwDraw(canvas, ctx);
+  setTimeout(function() {
+    canvas.style.transition = 'opacity 0.5s';
+    canvas.style.opacity = '0';
+    setTimeout(function() {
+      cancelAnimationFrame(fwAnimId);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }, 500);
+  }, 4000);
+}
+
+/* ── Combined entry point ────────────────────────────────────────────────── */
+function launchCelebration() {
+  console.log('[Poker] launchCelebration fired');
+  launchConfetti();       // DOM-based — always works
+  launchCanvasFireworks(); // Canvas-based — bonus burst effect
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1591,9 +1784,10 @@ function showNudge(name) {
   var overlay = document.getElementById('nudge-overlay');
   if (!overlay) return;
   overlay.style.display = 'flex';
-  overlay.innerHTML = '<div style="animation:nudgePop 0.4s ease,nudgeBob 0.3s ease-in-out infinite alternate;font-size:60px">🐾</div>'
-    + '<div style="font-family:\'Fredoka One\',cursive;font-size:22px;color:var(--orange);margin-top:8px">Hey ' + esc(name) + '! Time to vote 🐱</div>';
-  setTimeout(function() { overlay.style.display = 'none'; overlay.innerHTML = ''; }, 3000);
+  overlay.innerHTML = '<div style="animation:nudgePop 0.4s ease,nudgeBob 0.3s ease-in-out infinite alternate;font-size:60px">🥱</div>'
+    + '<div style="font-family:\'Fredoka One\',cursive;font-size:22px;color:var(--orange);margin-top:8px">' + esc(name) + '… wake up! 🐾</div>';
+  playYawn();
+  setTimeout(function() { overlay.style.display = 'none'; overlay.innerHTML = ''; }, 3500);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1955,7 +2149,8 @@ function runDogChaseEvent(dir, passIndex) {
       myName = name;
       saveLocal();
       setInSession(true);
-      hasLeft = false;
+      hasLeft    = false;
+      justKicked = false;
       send('join', { name: myName, wantAdmin: wantAdmin });
     });
   }
@@ -2098,6 +2293,11 @@ loadLocal();
 if (!myId) myId = uid();
 connect();
 renderJoinScreen();
+
+// Prewarm AudioContext on first user interaction anywhere on the page.
+// Browsers require a user gesture before audio can play; this ensures
+// the context is running before auto-reveal fires its celebration sound.
+document.addEventListener('click', function() { prewarmAudio(); }, { once: true });
 
 })(); // end IIFE
 </script>
