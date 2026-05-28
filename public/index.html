@@ -1619,9 +1619,7 @@ function getCheeseY() {
 
 function handleAnimate(msg) {
   if (msg.act === 'mouse_steal') {
-    var cheese = document.getElementById('cheese');
-    if (cheese) cheese.style.opacity = '0';
-    runMouseAnimation();
+    runMouseAnimation(); // cheese fades inside runMouseAnimation when mouse arrives
   } else if (msg.act === 'cat_chase') {
     runCatChase();
   } else if (msg.act === 'chase_pass') {
