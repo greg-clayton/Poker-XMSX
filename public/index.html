@@ -629,11 +629,22 @@ function onStateChange() {
   }
 
   if (!inGame) {
-    // Fully out of game — wipe everything
+    // Fully out of game — wipe vote selection state
     selectedSize = null; selectedConf = null;
     voteSent = false; lastSeenRound = null; lastSeenTicketIdx = null;
-    prevSetupDone = false;
+    // NOTE: prevSetupDone is intentionally NOT reset here so the flip
+    // detection below can fire correctly on the next state update.
   }
+
+  // ── Setup ticket list management ─────────────────────────────────────────
+  // Runs every state update (not just when inGame) so it fires even when the
+  // player is kicked out (End Session → inGame becomes false while setupDone
+  // also flips false). prevSetupDone is deliberately preserved across the
+  // !inGame state so the flip true→false is detected on the same update.
+  if (prevSetupDone && !game.setupDone) {
+    setupTickets = [];
+  }
+  prevSetupDone = !!game.setupDone;
 
   prevInGame = inGame;
 
@@ -672,13 +683,6 @@ function onStateChange() {
 
   // We're in the game
   setInSession(true);
-
-  // When setupDone flips true → false (new_session / reset) clear the local
-  // ticket list so the admin always starts with a blank setup screen.
-  if (prevSetupDone && !game.setupDone) {
-    setupTickets = [];
-  }
-  prevSetupDone = !!game.setupDone;
 
   if (!game.setupDone) {
     if (isAdmin) {
