@@ -96,9 +96,11 @@
   .tie-picker           { margin-top:10px; padding:10px 14px; border-radius:10px; background:rgba(244,162,97,0.06); border:1px solid rgba(244,162,97,0.2); text-align:left; }
   .tie-title            { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--orange); margin-bottom:8px; }
   .tie-col-title        { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:rgba(244,162,97,0.55); margin-bottom:5px; }
-  .tie-btns             { display:flex; gap:6px; flex-wrap:wrap; }
-  .admin-selector-grid  { display:flex; gap:14px; flex-wrap:wrap; }
-  .admin-selector-col   { flex:1; min-width:130px; }
+  .tie-btns                    { display:flex; gap:6px; flex-wrap:wrap; }
+  .admin-selector-grid         { display:flex; flex-direction:column; gap:10px; }
+  .admin-selector-col          { display:flex; flex-direction:column; gap:5px; }
+  .admin-selector-col .tie-btns{ flex-wrap:nowrap; }
+  .admin-selector-col .tie-btn { flex:1; text-align:center; }
   .tie-btn              { padding:6px 12px; border-radius:8px; border:1px solid rgba(244,162,97,0.3); background:rgba(244,162,97,0.08); color:var(--orange); font-size:13px; cursor:pointer; font-family:'Fredoka One',cursive; transition:all 0.15s; }
   .tie-btn:hover        { background:rgba(244,162,97,0.2); }
   .tie-btn.selected     { background:rgba(244,162,97,0.35); border-color:var(--orange); box-shadow:0 0 0 1px var(--orange); }
