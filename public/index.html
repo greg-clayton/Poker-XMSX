@@ -1460,6 +1460,7 @@ function openSummaryModal() {
 
   var scored = history.filter(function(h) { return !h.skipped; }).length;
   var skipped = history.filter(function(h) { return h.skipped; }).length;
+  var isAdminSummary = !!(game && game.showSummary && myId && game.adminId === myId);
 
   var modal = document.getElementById('session-modal');
   if (!modal) return;
@@ -1492,6 +1493,7 @@ function openSummaryModal() {
     + '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">'
     + '<button id="summary-csv-btn" class="btn btn-subtle btn-sm">⬇️ Download CSV</button>'
     + (closable ? '<button id="summary-close-btn" class="btn btn-ghost btn-sm">Close</button>' : '')
+    + (isAdminSummary ? '<button id="summary-leave-btn" class="btn btn-session btn-sm">🚪 Leave Session</button>' : '')
     + '</div>'
     + '</div>';
 
@@ -1508,6 +1510,18 @@ function openSummaryModal() {
         showScreen('game-screen');
         renderGameScreen();
       }
+    });
+  }
+
+  var leaveBtn = document.getElementById('summary-leave-btn');
+  if (leaveBtn) {
+    leaveBtn.addEventListener('click', function() {
+      modal.style.display = 'none';
+      summaryOpen = false;
+      hasLeft = true;
+      send('reset', {});       // wipe server game state for everyone
+      setInSession(false);
+      renderJoinScreen();
     });
   }
 
