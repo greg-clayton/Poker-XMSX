@@ -1326,6 +1326,7 @@ var finishConfirm     = false;
 var skipConfirm       = false;
 var resetConfirm      = false;
 var newSessionConfirm = false;
+var endConfirm        = false;
 
 function renderAdminControls() {
   var leftCol = document.getElementById('left-col');
@@ -1404,8 +1405,9 @@ function renderAdminControls() {
         showInlineConfirm(btn, 'Finish?', function() { finishConfirm = false; ab.dataset.ids = ''; send('show_summary'); }, function() { finishConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
       }
       else if (spec.action === 'reset') {
-        if (btn.dataset.confirm) { send('reset'); btn.dataset.confirm = ''; }
-        else { btn.textContent = 'Sure? (click again)'; btn.dataset.confirm = '1'; setTimeout(function() { btn.textContent = spec.label; btn.dataset.confirm = ''; }, 3000); }
+        if (endConfirm) return;
+        endConfirm = true;
+        showInlineConfirm(btn, 'Sure', function() { endConfirm = false; ab.dataset.ids = ''; send('reset'); }, function() { endConfirm = false; ab.dataset.ids = ''; renderAdminControls(); });
       }
     });
     ab.appendChild(btn);
