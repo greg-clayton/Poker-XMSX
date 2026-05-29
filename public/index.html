@@ -1470,7 +1470,8 @@ function openSummaryModal() {
   var modal = document.getElementById('session-modal');
   if (!modal) return;
   modal.style.display = 'flex';
-  modal.innerHTML = '<div style="background:linear-gradient(135deg,#1e1030,#140a26);border:1px solid rgba(201,160,245,0.2);border-radius:24px;padding:32px;max-width:640px;width:100%;max-height:90vh;overflow-y:auto;position:relative">'
+  modal.innerHTML = '<div style="background:linear-gradient(135deg,#1e1030,#140a26);border:1px solid rgba(201,160,245,0.2);border-radius:24px;padding:32px 32px 0;max-width:640px;width:100%;max-height:90vh;display:flex;flex-direction:column;position:relative">'
+    + '<div style="overflow-y:auto;flex:1;padding-bottom:16px">'
     + '<div style="text-align:center;margin-bottom:24px">'
     + '<div style="font-size:48px;margin-bottom:8px">🎉</div>'
     + '<h2 style="font-family:\'Fredoka One\',cursive;font-size:28px;color:var(--orange);margin-bottom:6px">Session Summary</h2>'
@@ -1495,7 +1496,8 @@ function openSummaryModal() {
     + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
     + attendees.map(function(n) { return '<span style="padding:3px 10px;border-radius:20px;background:rgba(201,160,245,0.1);border:1px solid rgba(201,160,245,0.2);font-size:12px;color:var(--text)">' + esc(n) + '</span>'; }).join('')
     + '</div></div>' : '')
-    + '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">'
+    + '</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;padding:16px 0;border-top:1px solid rgba(201,160,245,0.1);flex-shrink:0">'
     + '<button id="summary-csv-btn" class="btn btn-subtle btn-sm">⬇️ Download CSV</button>'
     + (closable ? '<button id="summary-close-btn" class="btn btn-ghost btn-sm">Close</button>' : '')
     + (isAdminSummary ? '<button id="summary-leave-btn" class="btn btn-session btn-sm">🚪 Leave Session</button>' : '')
