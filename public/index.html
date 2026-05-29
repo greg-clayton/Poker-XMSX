@@ -807,8 +807,19 @@ function onStateChange() {
   if (justRevealed) {
     console.log('[Poker] 🎆 Celebration firing');
     prewarmAudio();
-    launchCelebration();
-    setTimeout(playMeow, 300);
+    setTimeout(playMeow, 300); // audio is scheduled ahead-of-time — plays even in background
+    // Animations (RAF + CSS) are throttled in background tabs — defer until visible
+    if (!document.hidden) {
+      launchCelebration();
+    } else {
+      var _visHandler = function() {
+        if (!document.hidden) {
+          document.removeEventListener('visibilitychange', _visHandler);
+          launchCelebration();
+        }
+      };
+      document.addEventListener('visibilitychange', _visHandler);
+    }
   }
 
   renderGameScreen();
