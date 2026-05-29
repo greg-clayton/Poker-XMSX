@@ -802,14 +802,18 @@ function onStateChange() {
   // Fire celebration the first time we render a reveal for this round/ticket.
   // This runs inside onStateChange which is ALWAYS called when the user sees
   // the results screen — so it's guaranteed to fire when revealed=true.
+  var celebKey = (game.round || 1) + '-' + (game.ticketIndex || 0);
   if (game.revealed) {
-    var celebKey = (game.round || 1) + '-' + (game.ticketIndex || 0);
     if (!celebratedKeys[celebKey]) {
       celebratedKeys[celebKey] = true;
       console.log('[Poker] 🎆 Celebration firing for key', celebKey);
+      prewarmAudio(); // resume AudioContext immediately so meow isn't blocked
       launchCelebration();
-      setTimeout(playMeow, 1000);
+      setTimeout(playMeow, 300);
     }
+  } else {
+    // revealed went false (reset_round) — clear key so re-reveal fires celebration again
+    delete celebratedKeys[celebKey];
   }
 
   renderGameScreen();
