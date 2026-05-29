@@ -1523,12 +1523,17 @@ function openSummaryModal() {
   var leaveBtn = document.getElementById('summary-leave-btn');
   if (leaveBtn) {
     leaveBtn.addEventListener('click', function() {
-      modal.style.display = 'none';
-      summaryOpen = false;
-      hasLeft = true;
-      send('reset', {});       // wipe server game state for everyone
-      setInSession(false);
-      renderJoinScreen();
+      showInlineConfirm(leaveBtn, 'Sure',
+        function() {
+          modal.style.display = 'none';
+          summaryOpen = false;
+          hasLeft = true;
+          send('reset', {});
+          setInSession(false);
+          renderJoinScreen();
+        },
+        function() { openSummaryModal(); } // cancel — rebuild to restore the button
+      );
     });
   }
 
