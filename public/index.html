@@ -466,7 +466,7 @@ var tiePendingConf    = null;  // admin's locally-highlighted conf choice (pre-s
 var tieEditOpen       = false; // whether the ✏️ Edit picker is expanded
 var cheeseGrabbed     = false; // local animation state — cheese stolen mid-animation
 var justKicked        = false; // set when server removes us from game (kick/end); guards auto-rejoin routing
-var celebratedKeys    = {};    // tracks which round+ticket reveals have already fired celebration
+var prevRevealed      = false; // tracks previous revealed state to detect false→true transition for celebration
 
 /* ── Audio engine ─────────────────────────────────────────────────────────── */
 var _audioCtx = null;
@@ -734,7 +734,7 @@ function onStateChange() {
   // !inGame state so the flip true→false is detected on the same update.
   if (prevSetupDone && !game.setupDone) {
     setupTickets = [];
-    celebratedKeys = {};
+    prevRevealed = false;
   }
   prevSetupDone = !!game.setupDone;
 
@@ -799,21 +799,16 @@ function onStateChange() {
 
   showScreen('game-screen');
 
-  // Fire celebration the first time we render a reveal for this round/ticket.
-  // This runs inside onStateChange which is ALWAYS called when the user sees
-  // the results screen — so it's guaranteed to fire when revealed=true.
-  var celebKey = (game.round || 1) + '-' + (game.ticketIndex || 0);
-  if (game.revealed) {
-    if (!celebratedKeys[celebKey]) {
-      celebratedKeys[celebKey] = true;
-      console.log('[Poker] 🎆 Celebration firing for key', celebKey);
-      prewarmAudio(); // resume AudioContext immediately so meow isn't blocked
-      launchCelebration();
-      setTimeout(playMeow, 300);
-    }
-  } else {
-    // revealed went false (reset_round) — clear key so re-reveal fires celebration again
-    delete celebratedKeys[celebKey];
+  // Fire celebration whenever revealed transitions false→true.
+  // Using a simple prevRevealed flag is more reliable than key-based tracking —
+  // no cleanup needed after reset_round, and works even if tab was backgrounded.
+  var justRevealed = game.revealed && !prevRevealed;
+  prevRevealed = !!game.revealed;
+  if (justRevealed) {
+    console.log('[Poker] 🎆 Celebration firing');
+    prewarmAudio();
+    launchCelebration();
+    setTimeout(playMeow, 300);
   }
 
   renderGameScreen();
