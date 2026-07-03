@@ -153,7 +153,7 @@ wss.on("connection", ws => {
           game.players = game.players.filter(p => {
             if (p.id === pid)         return false;
             if (p.name !== msg.name)  return true;
-            if (p.id === game.adminId) game.adminId = null;
+            if (p.id === game.adminId) game.adminId = pid; // transfer admin to reconnecting player
             return false;
           });
         }
