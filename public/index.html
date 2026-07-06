@@ -2356,5 +2356,58 @@ document.addEventListener('click', function() { prewarmAudio(); }, { once: true 
   });
 })();
 </script>
+<script>
+/* Seamless hand-off: when arrived from the unified Purrfect app with
+   ?name=…&admin=…, auto-fill the login and join so the XMSX login screen is
+   never shown. The user lands directly on setup (admin) / game or waiting
+   (non-admin), exactly like the other games. Direct visits (no params) are
+   unaffected and show the normal login. */
+(function() {
+  var params;
+  try { params = new URLSearchParams(window.location.search); } catch(e) { return; }
+  var name = params.get('name');
+  if (!name) return; // normal visit — show the login form
+  var wantAdmin = params.get('admin') === '1';
+
+  // Strip the query string so credentials aren't left in the URL and a refresh
+  // doesn't re-fire this (the app's own session persistence handles refreshes).
+  try { history.replaceState(null, '', window.location.pathname); } catch(e) {}
+
+  var _done = false;
+  function autoLogin() {
+    if (_done) return;
+    var joinScreen = document.getElementById('join-screen');
+    if (!joinScreen || joinScreen.style.display === 'none') return;
+    var nameInput = document.getElementById('name-input');
+    var passInput = document.getElementById('pass-input');
+    var joinBtn   = document.getElementById('join-btn');
+    if (!nameInput || !passInput || !joinBtn) return;
+    if (nameInput.value) return; // already filled — don't interfere
+    _done = true;
+
+    nameInput.value = name;
+    nameInput.dispatchEvent(new Event('input',  { bubbles: true }));
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    passInput.value = 'XmsX101.';
+    passInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    if (wantAdmin) {
+      var adminTick   = document.getElementById('admin-tick');
+      var adminToggle = document.getElementById('admin-toggle');
+      if (adminTick && adminTick.style.display === 'none' && adminToggle) adminToggle.click();
+    }
+
+    setTimeout(function() {
+      var btn = document.getElementById('join-btn');
+      if (btn) { btn.disabled = false; btn.click(); }
+    }, 120);
+  }
+
+  setTimeout(autoLogin, 200);
+  setTimeout(autoLogin, 600);
+  setTimeout(autoLogin, 1200);
+})();
+</script>
 </body>
 </html>
