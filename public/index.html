@@ -206,6 +206,37 @@
 </style>
 </head>
 <body>
+<script>
+/* Unified-app integration (runs before the login renders):
+   - Arriving from the unified app (?name=…): remember the return URL and cover
+     the page with a loading overlay so the XMSX login is never seen while the
+     auto-login (below) joins.
+   - Returning after a Back/Leave in the XMSX app (no params, not in a session,
+     but a return URL was stored): go straight back to the unified app instead of
+     showing the XMSX login. */
+(function() {
+  var name = null, retParam = null, inSession = false, storedReturn = null;
+  try { var p = new URLSearchParams(location.search); name = p.get('name'); retParam = p.get('return'); } catch(e) {}
+  try { inSession = sessionStorage.getItem('pokerInSession') === '1'; } catch(e) {}
+  try { storedReturn = sessionStorage.getItem('unifiedReturn'); } catch(e) {}
+
+  if (!name && storedReturn && !inSession) {
+    try { sessionStorage.removeItem('unifiedReturn'); } catch(e) {}
+    location.replace(storedReturn);
+    return;
+  }
+
+  if (name) {
+    if (retParam) { try { sessionStorage.setItem('unifiedReturn', retParam); } catch(e) {} }
+    var ov = document.createElement('div');
+    ov.id = 'xmsx-handoff-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 40% 0%,#1e0a3c 0%,#0e0618 70%)';
+    ov.innerHTML = '<div style="font-size:56px;filter:drop-shadow(0 0 20px rgba(244,162,97,0.5))">🐱</div>'
+                 + '<div style="color:#c9a0f5;font-size:16px;margin-top:14px;letter-spacing:1px;font-family:sans-serif">Joining…</div>';
+    (document.body || document.documentElement).appendChild(ov);
+  }
+})();
+</script>
 <div id="app">
   <canvas id="fireworks-canvas" style="position:fixed;inset:0;z-index:999;pointer-events:none;opacity:0;transition:opacity 0.5s"></canvas>
   <div id="nudge-overlay" style="position:fixed;inset:0;z-index:1000;pointer-events:none;display:none;flex-direction:column;align-items:center;justify-content:center"></div>
@@ -2408,10 +2439,17 @@ document.addEventListener('click', function() { prewarmAudio(); }, { once: true 
     joinBtn.click();
   }
 
-  // Retry until the join lands (join screen closes) or we give up (~20s).
+  function removeOverlay() {
+    var o = document.getElementById('xmsx-handoff-overlay');
+    if (o && o.parentNode) o.parentNode.removeChild(o);
+  }
+
+  // Retry until the join lands (join screen closes) or we give up (~20s). Drop the
+  // loading overlay once we're through (or on give-up, so the user isn't stuck).
   var tries = 0;
   var iv = setInterval(function() {
-    if (joined() || tries++ > 45) { clearInterval(iv); return; }
+    if (joined()) { removeOverlay(); clearInterval(iv); return; }
+    if (tries++ > 45) { removeOverlay(); clearInterval(iv); return; }
     attempt();
   }, 450);
   attempt();
