@@ -2373,40 +2373,48 @@ document.addEventListener('click', function() { prewarmAudio(); }, { once: true 
   // doesn't re-fire this (the app's own session persistence handles refreshes).
   try { history.replaceState(null, '', window.location.pathname); } catch(e) {}
 
-  var _done = false;
-  function autoLogin() {
-    if (_done) return;
-    var joinScreen = document.getElementById('join-screen');
-    if (!joinScreen || joinScreen.style.display === 'none') return;
+  // We've "joined" once the login screen is gone (the app routes us to
+  // setup / game / waiting). Until then, keep re-filling and re-clicking Join —
+  // on a cold-started server the WebSocket may not be connected when the first
+  // attempt fires, so a single click gets lost. The server de-dupes by name,
+  // so repeated attempts are safe.
+  function joined() {
+    var js = document.getElementById('join-screen');
+    return !js || getComputedStyle(js).display === 'none';
+  }
+
+  function attempt() {
+    if (joined()) return;
     var nameInput = document.getElementById('name-input');
     var passInput = document.getElementById('pass-input');
     var joinBtn   = document.getElementById('join-btn');
     if (!nameInput || !passInput || !joinBtn) return;
-    if (nameInput.value) return; // already filled — don't interfere
-    _done = true;
 
-    nameInput.value = name;
-    nameInput.dispatchEvent(new Event('input',  { bubbles: true }));
-    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    passInput.value = 'XmsX101.';
-    passInput.dispatchEvent(new Event('input', { bubbles: true }));
-
+    if (nameInput.value !== name) {
+      nameInput.value = name;
+      nameInput.dispatchEvent(new Event('input',  { bubbles: true }));
+      nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (passInput.value !== 'XmsX101.') {
+      passInput.value = 'XmsX101.';
+      passInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     if (wantAdmin) {
       var adminTick   = document.getElementById('admin-tick');
       var adminToggle = document.getElementById('admin-toggle');
-      if (adminTick && adminTick.style.display === 'none' && adminToggle) adminToggle.click();
+      if (adminTick && getComputedStyle(adminTick).display === 'none' && adminToggle) adminToggle.click();
     }
-
-    setTimeout(function() {
-      var btn = document.getElementById('join-btn');
-      if (btn) { btn.disabled = false; btn.click(); }
-    }, 120);
+    joinBtn.disabled = false;
+    joinBtn.click();
   }
 
-  setTimeout(autoLogin, 200);
-  setTimeout(autoLogin, 600);
-  setTimeout(autoLogin, 1200);
+  // Retry until the join lands (join screen closes) or we give up (~20s).
+  var tries = 0;
+  var iv = setInterval(function() {
+    if (joined() || tries++ > 45) { clearInterval(iv); return; }
+    attempt();
+  }, 450);
+  attempt();
 })();
 </script>
 </body>
