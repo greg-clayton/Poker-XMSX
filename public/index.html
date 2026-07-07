@@ -2462,11 +2462,29 @@ document.addEventListener('click', function() { prewarmAudio(); }, { once: true 
   // loading overlay once we're through (or on give-up, so the user isn't stuck).
   var tries = 0;
   var iv = setInterval(function() {
-    if (joined()) { removeOverlay(); clearInterval(iv); return; }
+    if (joined()) { removeOverlay(); window.__xmsxJoinedOnce = true; clearInterval(iv); return; }
     if (tries++ > 45) { removeOverlay(); clearInterval(iv); return; }
     attempt();
   }, 450);
   attempt();
+
+  // Once we've been in the game, any return to the login screen — leaving from the
+  // session summary, an admin reset, a kick, or the session ending — should go back
+  // to the unified app (team selection) rather than showing the XMSX login. Those
+  // paths render the login in-page (no reload), so watch for the join screen showing.
+  var js = document.getElementById('join-screen');
+  function backToUnifiedIfLeaving() {
+    if (!window.__xmsxJoinedOnce) return;                        // still in the initial hand-off
+    if (!js || getComputedStyle(js).display === 'none') return; // not on the login screen
+    var r = null; try { r = sessionStorage.getItem('unifiedReturn'); } catch(e) {}
+    if (!r) return;
+    try { sessionStorage.removeItem('unifiedReturn'); } catch(e) {}
+    location.replace(r);
+  }
+  if (js && window.MutationObserver) {
+    new MutationObserver(backToUnifiedIfLeaving).observe(js, { attributes: true, attributeFilter: ['style'] });
+  }
+  setInterval(backToUnifiedIfLeaving, 500); // fallback in case the screen switch isn't a style mutation
 })();
 </script>
 </body>
