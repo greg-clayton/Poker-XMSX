@@ -806,7 +806,13 @@ function onStateChange() {
   // We're in the game
   setInSession(true);
 
-  if (!game.setupDone) {
+  // Non-admin should wait if the admin isn't actually in the game — either because
+  // setup hasn't started yet OR because the admin set up and then left (setupDone
+  // stays true but adminId gets nulled). Without this, non-admins were dropped
+  // straight onto the game screen with no Top Cat present.
+  var adminPresent = !!(game.adminId && game.players.some(function(p) { return p.id === game.adminId; }));
+
+  if (!game.setupDone || (!isAdmin && !adminPresent)) {
     if (isAdmin) {
       if (justKicked) {
         // Server restart wiped state; we auto-rejoined into a fresh empty game.

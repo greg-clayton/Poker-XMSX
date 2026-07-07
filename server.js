@@ -142,6 +142,20 @@ wss.on("connection", ws => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
+    // Observer-only request: send this client the current state so it can render
+    // an out-of-band summary/banner (e.g. the unified app's login screen). Uses
+    // the masked payload (showSummary suppressed) since the requester isn't in
+    // the game.
+    if (msg.type === "request_state") {
+      ws.send(JSON.stringify({
+        type: "state",
+        game: { ...game, showSummary: false },
+        lastSession,
+        serverNow: Date.now(),
+      }));
+      return;
+    }
+
     switch (msg.type) {
 
       case "join": {
