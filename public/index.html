@@ -1034,23 +1034,37 @@ function renderResultBanner() {
   banner.style.display = '';
   var isAdmin = myId && game.adminId === myId;
 
-  // Size display
+  // Size display — once the admin has agreed a value that isn't the plain
+  // majority (i.e. a resolved tie or an edit), show that agreed choice in green.
+  // Otherwise show the clear majority, or "Tied"/dash while still pending.
   var sv = document.getElementById('result-size-val');
   var ss = document.getElementById('result-size-sub');
-  if (sv) sv.textContent = game.majoritySize || (game.sizeTie ? 'Tied' : '–');
+  var sizeAgreed = !!(game.agreedSize && game.agreedSize !== game.majoritySize);
+  if (sv) {
+    sv.textContent = sizeAgreed ? game.agreedSize
+                   : (game.majoritySize || (game.sizeTie ? 'Tied' : '–'));
+    sv.style.color = sizeAgreed ? '#a8e6a3' : '';
+  }
   if (ss) {
-    if (game.sizeTie) { ss.textContent = 'See tie resolution below'; }
-    else if (game.majoritySize && SIZE_MAP[game.majoritySize]) { ss.textContent = SIZE_MAP[game.majoritySize].sub; }
+    var sizeKey = sizeAgreed ? game.agreedSize : game.majoritySize;
+    if (game.sizeTie && !sizeAgreed) { ss.textContent = 'See tie resolution below'; }
+    else if (sizeKey && SIZE_MAP[sizeKey]) { ss.textContent = SIZE_MAP[sizeKey].sub; }
     else { ss.textContent = ''; }
   }
 
-  // Confidence display
+  // Confidence display — same treatment
   var cv = document.getElementById('result-conf-val');
   var cs = document.getElementById('result-conf-sub');
-  if (cv) cv.textContent = game.majorityConf || (game.confTie ? 'Tied' : '–');
+  var confAgreed = !!(game.agreedConf && game.agreedConf !== game.majorityConf);
+  if (cv) {
+    cv.textContent = confAgreed ? game.agreedConf
+                   : (game.majorityConf || (game.confTie ? 'Tied' : '–'));
+    cv.style.color = confAgreed ? '#a8e6a3' : '';
+  }
   if (cs) {
-    if (game.confTie) { cs.textContent = 'See tie resolution below'; }
-    else if (game.majorityConf && CONF_MAP[game.majorityConf]) { cs.textContent = CONF_MAP[game.majorityConf].sub; }
+    var confKey = confAgreed ? game.agreedConf : game.majorityConf;
+    if (game.confTie && !confAgreed) { cs.textContent = 'See tie resolution below'; }
+    else if (confKey && CONF_MAP[confKey]) { cs.textContent = CONF_MAP[confKey].sub; }
     else { cs.textContent = ''; }
   }
 
