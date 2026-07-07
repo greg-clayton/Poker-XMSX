@@ -514,32 +514,25 @@ function prewarmAudio() {
   var ctx = getAudioCtx();
   if (ctx.state === 'suspended') ctx.resume();
 }
+// Celebration audio: pre-buffered cheering + applause clip. Plays via HTMLAudio
+// (not Web Audio) so file decoding stays off the audio thread and the volume is
+// a plain 0-1 scalar. Volume tuned well below the original synth meow.
+var _celebrateAudio = (function() {
+  try {
+    var a = new Audio('celebrate.mp3');
+    a.preload = 'auto';
+    a.volume = 0.35;
+    return a;
+  } catch(e) { return null; }
+})();
 function playMeow() {
-  scheduleSound(function(ctx) {
-    try {
-      var DURATION = 1.1, t = ctx.currentTime + 0.02;
-      var master = ctx.createGain();
-      master.gain.setValueAtTime(0.45, t);
-      master.gain.setValueAtTime(0.45, t + DURATION - 0.15);
-      master.gain.linearRampToValueAtTime(0, t + DURATION);
-      master.connect(ctx.destination);
-      var osc = ctx.createOscillator(); var og = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(360, t); osc.frequency.linearRampToValueAtTime(800, t + 0.14);
-      osc.frequency.linearRampToValueAtTime(530, t + 0.38); osc.frequency.linearRampToValueAtTime(280, t + DURATION);
-      og.gain.setValueAtTime(0, t); og.gain.linearRampToValueAtTime(1, t + 0.05);
-      og.gain.setValueAtTime(1, t + 0.32); og.gain.linearRampToValueAtTime(0, t + DURATION);
-      osc.connect(og); og.connect(master); osc.start(t); osc.stop(t + DURATION);
-      var osc2 = ctx.createOscillator(); var og2 = ctx.createGain();
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(720, t); osc2.frequency.linearRampToValueAtTime(1600, t + 0.14);
-      osc2.frequency.linearRampToValueAtTime(1060, t + 0.38); osc2.frequency.linearRampToValueAtTime(560, t + DURATION);
-      og2.gain.setValueAtTime(0, t); og2.gain.linearRampToValueAtTime(0.28, t + 0.05);
-      og2.gain.linearRampToValueAtTime(0, t + DURATION);
-      osc2.connect(og2); og2.connect(master); osc2.start(t); osc2.stop(t + DURATION);
-      osc.onended = function() { try { master.disconnect(); } catch(e) {} };
-    } catch(e) { console.warn('Meow failed:', e); }
-  });
+  if (!_celebrateAudio) return;
+  try {
+    _celebrateAudio.pause();
+    _celebrateAudio.currentTime = 0;
+    var p = _celebrateAudio.play();
+    if (p && p.catch) p.catch(function() {}); // ignore autoplay-blocked errors
+  } catch(e) { console.warn('Celebrate failed:', e); }
 }
 function playYawn() {
   scheduleSound(function(ctx) {

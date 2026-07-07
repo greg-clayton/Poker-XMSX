@@ -114,6 +114,18 @@ function scheduleAnimations(wss, startedAt) {
 
 /* ── HTTP + WebSocket server ───────────────────────────────────────────────── */
 const server = http.createServer((req, res) => {
+  if (req.url && req.url.split("?")[0] === "/celebrate.mp3") {
+    fs.readFile(path.join(__dirname, "public", "celebrate.mp3"), (err, data) => {
+      if (err) { res.writeHead(404); res.end("Not found"); return; }
+      res.writeHead(200, {
+        "Content-Type":  "audio/mpeg",
+        "Content-Length": data.length,
+        "Cache-Control": "public, max-age=86400",
+      });
+      res.end(data);
+    });
+    return;
+  }
   fs.readFile(path.join(__dirname, "public", "index.html"), (err, data) => {
     if (err) { res.writeHead(500); res.end("Error loading app"); return; }
     res.writeHead(200, {
